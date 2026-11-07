@@ -20,21 +20,21 @@ class DashboardPage extends StatefulWidget {
 class _DashboardPageState extends State<DashboardPage> {
   int selectedIndex = 0;
 
-  static const Color olive = Color(0xFF697447);
-  static const Color darkOlive = Color(0xFF566038);
+  static const Color olive = Color(0xFF694A47);
+  static const Color darkOlive = Color(0xFF523B39);
 
-  static const Color maroon = Color(0xFF85263F);
-  static const Color darkMaroon = Color(0xFF702037);
+  static const Color maroon = Color(0xFF694A47);
+  static const Color darkMaroon = Color(0xFF523B39);
 
-  static const Color orange = Color(0xFFE87845);
+  static const Color orange = Color(0xFF96C1C5);
 
-  static const Color cream = Color(0xFFFAF7F0);
-  static const Color peach = Color(0xFFFCE5D2);
-  static const Color lightPeach = Color(0xFFFFEFE2);
+  static const Color cream = Color(0xFFFFF0DE);
+  static const Color peach = Color(0xFFE5F0EF);
+  static const Color lightPeach = Color(0xFFFFF7EC);
 
-  static const Color lightBlue = Color(0xFFE8F5FA);
-  static const Color lightPink = Color(0xFFFFEFF2);
-  static const Color softYellow = Color(0xFFFFF4D8);
+  static const Color lightBlue = Color(0xFFD9ECEC);
+  static const Color lightPink = Color(0xFFF4E6E3);
+  static const Color softYellow = Color(0xFFFFF5E5);
 
   void bukaProfile() {
     Navigator.push(
@@ -280,7 +280,7 @@ class _DashboardPageState extends State<DashboardPage> {
       body: Container(
         decoration: const BoxDecoration(
           gradient: LinearGradient(
-            colors: [cream, Color(0xFFF4F7F1)],
+            colors: [cream, Color(0xFFEAF3F2)],
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
           ),
@@ -541,7 +541,7 @@ class _DashboardPageState extends State<DashboardPage> {
                               width: 45,
                               height: 45,
                               decoration: BoxDecoration(
-                                color: const Color(0xFFF8DCE1),
+                                color: const Color(0xFFF4E6E3),
                                 borderRadius: BorderRadius.circular(14),
                               ),
                               child: const Icon(
@@ -614,7 +614,7 @@ class _DashboardPageState extends State<DashboardPage> {
                         decoration: BoxDecoration(
                           color: softYellow,
                           borderRadius: BorderRadius.circular(25),
-                          border: Border.all(color: const Color(0xFFF1C77A)),
+                          border: Border.all(color: const Color(0xFF96C1C5)),
                         ),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
@@ -709,8 +709,10 @@ class _DashboardPageState extends State<DashboardPage> {
         currentIndex: selectedIndex,
         onTap: pilihBottomNav,
         type: BottomNavigationBarType.fixed,
-        backgroundColor: Colors.white,
-        elevation: 8,
+        backgroundColor: const Color(0xFFFFF7EC),
+        elevation: 0,
+        selectedFontSize: 12,
+        unselectedFontSize: 11,
         selectedItemColor: olive,
         unselectedItemColor: Colors.grey,
         items: const [

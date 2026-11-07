@@ -9,11 +9,11 @@ class ProfileMahasiswaPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const olive = Color(0xFF687044);
-    const darkOlive = Color(0xFF4F5A35);
-    const orange = Color(0xFFD96545);
-    const lightOrange = Color(0xFFFCE7D6);
-    const beige = Color(0xFFF1EFE2);
+    const olive = Color(0xFF694A47);
+    const darkOlive = Color(0xFF523B39);
+    const orange = Color(0xFF96C1C5);
+    const lightOrange = Color(0xFFE5F0EF);
+    const beige = Color(0xFFEAF3F2);
 
     final screenWidth =
         MediaQuery.of(context).size.width;
@@ -23,8 +23,8 @@ class ProfileMahasiswaPage extends StatelessWidget {
         decoration: const BoxDecoration(
           gradient: LinearGradient(
             colors: [
-              Color(0xFFFAF7ED),
-              Color(0xFFFCE7D6),
+              Color(0xFFFFF0DE),
+              Color(0xFFE5F0EF),
             ],
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,

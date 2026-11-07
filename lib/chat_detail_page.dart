@@ -70,7 +70,7 @@ class _ChatDetailPageState
         child: Text(
           text,
           style: const TextStyle(
-            color: Color(0xFF4F5A35),
+            color: Color(0xFF523B39),
             fontSize: 13,
           ),
         ),
@@ -90,7 +90,7 @@ class _ChatDetailPageState
         ),
         padding: const EdgeInsets.all(13),
         decoration: BoxDecoration(
-          color: const Color(0xFFD96545),
+          color: const Color(0xFF96C1C5),
           borderRadius: BorderRadius.circular(18),
         ),
         child: Text(
@@ -106,17 +106,17 @@ class _ChatDetailPageState
 
   @override
   Widget build(BuildContext context) {
-    const orange = Color(0xFFD96545);
-    const darkOlive = Color(0xFF4F5A35);
+    const orange = Color(0xFF96C1C5);
+    const darkOlive = Color(0xFF523B39);
 
     return AnimatedPage(child: Scaffold(
-      backgroundColor: const Color(0xFFFAF7ED),
+      backgroundColor: const Color(0xFFFFF0DE),
       body: Container(
         decoration: const BoxDecoration(
           gradient: LinearGradient(
             colors: [
-              Color(0xFFFAF7ED),
-              Color(0xFFF1EFE2),
+              Color(0xFFFFF0DE),
+              Color(0xFFEAF3F2),
             ],
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
@@ -168,7 +168,7 @@ class _ChatDetailPageState
                       width: 45,
                       height: 45,
                       decoration: BoxDecoration(
-                        color: const Color(0xFFF1EFE2),
+                        color: const Color(0xFFEAF3F2),
                         shape: BoxShape.circle,
                       ),
                       child: const Icon(
@@ -290,7 +290,7 @@ class _ChatDetailPageState
                           horizontal: 15,
                         ),
                         decoration: BoxDecoration(
-                          color: const Color(0xFFF5F3EC),
+                          color: const Color(0xFFFFF7EC),
                           borderRadius:
                               BorderRadius.circular(25),
                         ),

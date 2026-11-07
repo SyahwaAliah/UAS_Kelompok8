@@ -21,8 +21,8 @@ class _ChecklistPageState extends State<ChecklistPage> {
     required bool selesai,
     required VoidCallback onTap,
   }) {
-    const primary = Color(0xFF687044);
-    const darkPrimary = Color(0xFF4F5A35);
+    const primary = Color(0xFF694A47);
+    const darkPrimary = Color(0xFF523B39);
 
     return GestureDetector(
       onTap: onTap,
@@ -96,16 +96,16 @@ class _ChecklistPageState extends State<ChecklistPage> {
 
   @override
   Widget build(BuildContext context) {
-    const primary = Color(0xFF687044);
-    const darkPrimary = Color(0xFF4F5A35);
+    const primary = Color(0xFF694A47);
+    const darkPrimary = Color(0xFF523B39);
 
     return AnimatedPage(child: Scaffold(
       body: Container(
         decoration: const BoxDecoration(
           gradient: LinearGradient(
             colors: [
-              Color(0xFFFAF7ED),
-              Color(0xFFFCE7D6),
+              Color(0xFFFFF0DE),
+              Color(0xFFE5F0EF),
             ],
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'jadwal_theme.dart';
+import 'database/database_helper.dart';
 
 class BookingJadwalPage extends StatefulWidget {
   const BookingJadwalPage({super.key});
@@ -23,7 +24,9 @@ class _BookingJadwalPageState
   }) {
     return GestureDetector(
       onTap: onTap,
-      child: Container(
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 240),
+        curve: Curves.easeOutCubic,
         padding: const EdgeInsets.symmetric(
           horizontal: 16,
           vertical: 13,
@@ -33,6 +36,9 @@ class _BookingJadwalPageState
               ? JadwalColors.olive
               : Colors.white,
           borderRadius: BorderRadius.circular(16),
+          boxShadow: selected
+              ? [BoxShadow(color: JadwalColors.olive.withOpacity(0.16), blurRadius: 12, offset: const Offset(0, 5))]
+              : [],
         ),
         child: Text(
           text,
@@ -48,7 +54,26 @@ class _BookingJadwalPageState
     );
   }
 
-  void konfirmasiBooking() {
+  Future<void> konfirmasiBooking() async {
+    final tanggal = DateTime.now().add(Duration(days: selectedDate));
+    const jam = ['09.00 - 10.00', '10.00 - 11.00',
+      '13.00 - 14.00', '14.00 - 15.00'];
+    const mode = ['Tatap Muka', 'Video Call'];
+    try {
+      await DatabaseHelper.instance.tambahJadwal(
+        tanggal: tanggal.toIso8601String().split('T').first,
+        jam: jam[selectedTime],
+        dosen: 'Dr. Budi Santoso',
+        mode: mode[selectedMode],
+      );
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Gagal menyimpan jadwal: $error')),
+      );
+      return;
+    }
+    if (!mounted) return;
     showDialog(
       context: context,
       builder: (dialogContext) {
@@ -229,44 +254,17 @@ class _BookingJadwalPageState
 
               Wrap(
                 spacing: 8,
-                children: [
-                  pilihan(
-                    text: '12 Okt',
-                    selected: selectedDate == 0,
-                    onTap: () {
-                      setState(() {
-                        selectedDate = 0;
-                      });
-                    },
-                  ),
-                  pilihan(
-                    text: '13 Okt',
-                    selected: selectedDate == 1,
-                    onTap: () {
-                      setState(() {
-                        selectedDate = 1;
-                      });
-                    },
-                  ),
-                  pilihan(
-                    text: '14 Okt',
-                    selected: selectedDate == 2,
-                    onTap: () {
-                      setState(() {
-                        selectedDate = 2;
-                      });
-                    },
-                  ),
-                  pilihan(
-                    text: '15 Okt',
-                    selected: selectedDate == 3,
-                    onTap: () {
-                      setState(() {
-                        selectedDate = 3;
-                      });
-                    },
-                  ),
-                ],
+                runSpacing: 8,
+                children: List.generate(4, (index) {
+                  final tanggal = DateTime.now().add(Duration(days: index));
+                  const bulan = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun',
+                    'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
+                  return pilihan(
+                    text: '${tanggal.day} ${bulan[tanggal.month - 1]}',
+                    selected: selectedDate == index,
+                    onTap: () => setState(() => selectedDate = index),
+                  );
+                }),
               ),
 
               const SizedBox(height: 25),

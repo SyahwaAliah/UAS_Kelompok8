@@ -7,11 +7,11 @@ import 'chat_detail_page.dart';
 class ProfilDosenPage extends StatelessWidget {
   const ProfilDosenPage({super.key});
 
-  static const Color olive = Color(0xFF687044);
-  static const Color lightOlive = Color(0xFFF1EFE2);
-  static const Color orange = Color(0xFFD96545);
-  static const Color lightOrange = Color(0xFFFCE7D6);
-  static const Color darkOlive = Color(0xFF4F5A35);
+  static const Color olive = Color(0xFF694A47);
+  static const Color lightOlive = Color(0xFFEAF3F2);
+  static const Color orange = Color(0xFF96C1C5);
+  static const Color lightOrange = Color(0xFFE5F0EF);
+  static const Color darkOlive = Color(0xFF523B39);
 
   @override
   Widget build(BuildContext context) {
@@ -19,13 +19,13 @@ class ProfilDosenPage extends StatelessWidget {
         MediaQuery.of(context).size.width;
 
     return AnimatedPage(child: Scaffold(
-      backgroundColor: const Color(0xFFFAF7ED),
+      backgroundColor: const Color(0xFFFFF0DE),
       body: Container(
         decoration: const BoxDecoration(
           gradient: LinearGradient(
             colors: [
-              Color(0xFFFAF7ED),
-              Color(0xFFF1EFE2),
+              Color(0xFFFFF0DE),
+              Color(0xFFEAF3F2),
             ],
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,

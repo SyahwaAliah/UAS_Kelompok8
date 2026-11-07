@@ -1,13 +1,13 @@
 import 'package:flutter/material.dart';
 
 class DetailBimbinganPage {
-  static const Color olive = Color(0xFF697447);
-  static const Color darkOlive = Color(0xFF566038);
-  static const Color cream = Color(0xFFFFF9F0);
-  static const Color softGreen = Color(0xFFF2F3E7);
-  static const Color lightPeach = Color(0xFFFFEBDD);
-  static const Color orange = Color(0xFFE77845);
-  static const Color textGrey = Color(0xFF9A9A94);
+  static const Color olive = Color(0xFF694A47);
+  static const Color darkOlive = Color(0xFF523B39);
+  static const Color cream = Color(0xFFFFF0DE);
+  static const Color softGreen = Color(0xFFEAF3F2);
+  static const Color lightPeach = Color(0xFFFFF7EC);
+  static const Color orange = Color(0xFF96C1C5);
+  static const Color textGrey = Color(0xFF8B7774);
 
   static void open(BuildContext context) {
     showGeneralDialog(
@@ -186,7 +186,7 @@ class DetailBimbinganPage {
                 Text(
                   title,
                   style: const TextStyle(
-                    color: Color(0xFF303521),
+                    color: Color(0xFF694A47),
                     fontWeight: FontWeight.bold,
                     fontSize: 14,
                   ),

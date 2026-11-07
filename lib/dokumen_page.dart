@@ -6,17 +6,17 @@ class DokumenPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const primary = Color(0xFF687044);
-    const darkPrimary = Color(0xFF4F5A35);
-    const orange = Color(0xFFD96545);
+    const primary = Color(0xFF694A47);
+    const darkPrimary = Color(0xFF523B39);
+    const orange = Color(0xFF96C1C5);
 
     return AnimatedPage(child: Scaffold(
       body: Container(
         decoration: const BoxDecoration(
           gradient: LinearGradient(
             colors: [
-              Color(0xFFFAF7ED),
-              Color(0xFFFCE7D6),
+              Color(0xFFFFF0DE),
+              Color(0xFFE5F0EF),
             ],
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
@@ -123,7 +123,7 @@ class DokumenPage extends StatelessWidget {
     String title,
     String subtitle,
   ) {
-    const orange = Color(0xFFD96545);
+    const orange = Color(0xFF96C1C5);
 
     return Container(
       width: double.infinity,
@@ -139,7 +139,7 @@ class DokumenPage extends StatelessWidget {
             width: 48,
             height: 48,
             decoration: BoxDecoration(
-              color: const Color(0xFFF1EFE2),
+              color: const Color(0xFFEAF3F2),
               borderRadius: BorderRadius.circular(14),
             ),
             child: const Icon(

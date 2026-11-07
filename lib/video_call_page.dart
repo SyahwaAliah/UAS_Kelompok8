@@ -6,10 +6,10 @@ class VideoCallPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const olive = Color(0xFF687044);
-    const darkOlive = Color(0xFF4F5A35);
-    const orange = Color(0xFFD96545);
-    const lightOrange = Color(0xFFFCE7D6);
+    const olive = Color(0xFF694A47);
+    const darkOlive = Color(0xFF523B39);
+    const orange = Color(0xFF96C1C5);
+    const lightOrange = Color(0xFFE5F0EF);
 
     return AnimatedPage(child: Scaffold(
       backgroundColor: darkOlive,

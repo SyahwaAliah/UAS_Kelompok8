@@ -8,18 +8,18 @@ class ChatPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const orange = Color(0xFFD96545);
-    const darkOlive = Color(0xFF4F5A35);
-    const olive = Color(0xFF687044);
+    const orange = Color(0xFF96C1C5);
+    const darkOlive = Color(0xFF523B39);
+    const olive = Color(0xFF694A47);
 
     return AnimatedPage(child: Scaffold(
-      backgroundColor: const Color(0xFFFAF7ED),
+      backgroundColor: const Color(0xFFFFF0DE),
       body: Container(
         decoration: const BoxDecoration(
           gradient: LinearGradient(
             colors: [
-              Color(0xFFFAF7ED),
-              Color(0xFFF1EFE2),
+              Color(0xFFFFF0DE),
+              Color(0xFFEAF3F2),
             ],
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
@@ -133,7 +133,7 @@ class ChatPage extends StatelessWidget {
                             height: 55,
                             decoration: BoxDecoration(
                               color:
-                                  const Color(0xFFF1EFE2),
+                                  const Color(0xFFEAF3F2),
                               shape: BoxShape.circle,
                             ),
                             child: const Icon(

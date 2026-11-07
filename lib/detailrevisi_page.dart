@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 
 class DetailRevisiPage {
-  static const Color maroon = Color(0xFF7A263A);
-  static const Color darkMaroon = Color(0xFF5C1D2B);
-  static const Color lightSky = Color(0xFFEAF7FC);
-  static const Color lightAmber = Color(0xFFFFF9E6);
+  static const Color maroon = Color(0xFF694A47);
+  static const Color darkMaroon = Color(0xFF523B39);
+  static const Color lightSky = Color(0xFFD9ECEC);
+  static const Color lightAmber = Color(0xFFFFF5E5);
 
   static void buka(BuildContext context) {
     showGeneralDialog(
@@ -161,7 +161,7 @@ class DetailRevisiPage {
                 Container(
                   padding: const EdgeInsets.all(15),
                   decoration: BoxDecoration(
-                    color: const Color(0xFFFFF1F3),
+                    color: const Color(0xFFF4E6E3),
                     borderRadius:
                         BorderRadius.circular(18),
                   ),
