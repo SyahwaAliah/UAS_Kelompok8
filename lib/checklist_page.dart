@@ -1,5 +1,16 @@
 import 'package:flutter/material.dart';
+import 'empty_state.dart';
 import 'jadwal_theme.dart';
+
+class ChecklistItem {
+  final String title;
+  bool selesai;
+
+  ChecklistItem({
+    required this.title,
+    this.selesai = false,
+  });
+}
 
 class ChecklistPage extends StatefulWidget {
   const ChecklistPage({super.key});
@@ -10,22 +21,133 @@ class ChecklistPage extends StatefulWidget {
 }
 
 class _ChecklistPageState extends State<ChecklistPage> {
-  bool tahap1 = true;
-  bool tahap2 = true;
-  bool tahap3 = false;
-  bool tahap4 = false;
-  bool tahap5 = false;
+  static const primary = Color(0xFF694A47);
+  static const darkPrimary = Color(0xFF523B39);
 
-  Widget itemChecklist({
-    required String title,
-    required bool selesai,
-    required VoidCallback onTap,
-  }) {
-    const primary = Color(0xFF694A47);
-    const darkPrimary = Color(0xFF523B39);
+  List<ChecklistItem> _items = [];
+  bool _isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadItems();
+  }
+
+  // ---------------------------------------------------------------
+  // LOGIC
+  // ---------------------------------------------------------------
+
+  /// Sementara memakai data default. Nanti bagian ini
+  /// bisa diganti dengan pengambilan data dari sqflite.
+  Future<void> _loadItems() async {
+    setState(() => _isLoading = true);
+
+    await Future.delayed(const Duration(milliseconds: 600));
+
+    if (!mounted) return;
+
+    setState(() {
+      _items = [
+        ChecklistItem(title: 'Penentuan Topik', selesai: true),
+        ChecklistItem(title: 'Bab 1', selesai: true),
+        ChecklistItem(title: 'Bab 2'),
+        ChecklistItem(title: 'Bab 3'),
+        ChecklistItem(title: 'Seminar Proposal'),
+      ];
+      _isLoading = false;
+    });
+  }
+
+  void _toggleItem(ChecklistItem item) {
+    setState(() {
+      item.selesai = !item.selesai;
+    });
+  }
+
+  Future<void> _addItem() async {
+    String title = '';
+
+    final result = await showDialog<String>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('Tambah Tahap'),
+          content: TextField(
+            autofocus: true,
+            textCapitalization: TextCapitalization.sentences,
+            decoration: const InputDecoration(
+              hintText: 'Nama tahap, contoh: Bab 4',
+            ),
+            onChanged: (value) => title = value,
+            onSubmitted: (value) =>
+                Navigator.pop(context, value.trim()),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Batal'),
+            ),
+            TextButton(
+              onPressed: () =>
+                  Navigator.pop(context, title.trim()),
+              child: const Text(
+                'Tambah',
+                style: TextStyle(color: primary),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (result == null || result.isEmpty) return;
+
+    setState(() {
+      _items.add(ChecklistItem(title: result));
+    });
+  }
+
+  Future<void> _confirmDelete(ChecklistItem item) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('Hapus tahap?'),
+          content: Text(item.title),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Batal'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text(
+                'Hapus',
+                style: TextStyle(color: primary),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (confirm != true) return;
+
+    setState(() {
+      _items.remove(item);
+    });
+  }
+
+  // ---------------------------------------------------------------
+  // UI
+  // ---------------------------------------------------------------
+
+  Widget itemChecklist(ChecklistItem item) {
+    final selesai = item.selesai;
 
     return GestureDetector(
-      onTap: onTap,
+      onTap: () => _toggleItem(item),
+      onLongPress: () => _confirmDelete(item),
       child: Container(
         margin: const EdgeInsets.only(bottom: 10),
         padding: const EdgeInsets.symmetric(
@@ -55,10 +177,10 @@ class _ChecklistPageState extends State<ChecklistPage> {
               ),
               child: selesai
                   ? const Icon(
-                      Icons.check,
-                      size: 17,
-                      color: Colors.white,
-                    )
+                Icons.check,
+                size: 17,
+                color: Colors.white,
+              )
                   : null,
             ),
 
@@ -66,7 +188,7 @@ class _ChecklistPageState extends State<ChecklistPage> {
 
             Expanded(
               child: Text(
-                title,
+                item.title,
                 style: TextStyle(
                   fontWeight: FontWeight.w600,
                   decoration: selesai
@@ -94,11 +216,54 @@ class _ChecklistPageState extends State<ChecklistPage> {
     );
   }
 
+  Widget _buildBody() {
+    if (_isLoading) {
+      return const Center(
+        child: CircularProgressIndicator(color: primary),
+      );
+    }
+
+    if (_items.isEmpty) {
+      return EmptyState(
+        icon: Icons.checklist_rounded,
+        title: 'Checklist masih kosong',
+        message:
+        'Tambahkan tahap skripsi untuk mulai memantau progres kamu.',
+        actionLabel: 'Tambah Tahap',
+        onAction: _addItem,
+      );
+    }
+
+    final selesaiCount =
+        _items.where((item) => item.selesai).length;
+
+    return SingleChildScrollView(
+      padding: const EdgeInsets.fromLTRB(15, 15, 15, 90),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.only(
+              left: 4,
+              bottom: 12,
+            ),
+            child: Text(
+              '$selesaiCount dari ${_items.length} tahap selesai',
+              style: const TextStyle(
+                color: Colors.grey,
+                fontSize: 12,
+              ),
+            ),
+          ),
+
+          ..._items.map(itemChecklist),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    const primary = Color(0xFF694A47);
-    const darkPrimary = Color(0xFF523B39);
-
     return AnimatedPage(child: Scaffold(
       body: Container(
         decoration: const BoxDecoration(
@@ -127,7 +292,7 @@ class _ChecklistPageState extends State<ChecklistPage> {
                         boxShadow: [
                           BoxShadow(
                             color:
-                                Colors.black.withOpacity(0.05),
+                            Colors.black.withOpacity(0.05),
                             blurRadius: 8,
                             offset: const Offset(0, 3),
                           ),
@@ -159,62 +324,20 @@ class _ChecklistPageState extends State<ChecklistPage> {
                 ),
               ),
 
-              Expanded(
-                child: SingleChildScrollView(
-                  padding: const EdgeInsets.all(15),
-                  child: Column(
-                    children: [
-                      itemChecklist(
-                        title: 'Penentuan Topik',
-                        selesai: tahap1,
-                        onTap: () {
-                          setState(() {
-                            tahap1 = !tahap1;
-                          });
-                        },
-                      ),
-                      itemChecklist(
-                        title: 'Bab 1',
-                        selesai: tahap2,
-                        onTap: () {
-                          setState(() {
-                            tahap2 = !tahap2;
-                          });
-                        },
-                      ),
-                      itemChecklist(
-                        title: 'Bab 2',
-                        selesai: tahap3,
-                        onTap: () {
-                          setState(() {
-                            tahap3 = !tahap3;
-                          });
-                        },
-                      ),
-                      itemChecklist(
-                        title: 'Bab 3',
-                        selesai: tahap4,
-                        onTap: () {
-                          setState(() {
-                            tahap4 = !tahap4;
-                          });
-                        },
-                      ),
-                      itemChecklist(
-                        title: 'Seminar Proposal',
-                        selesai: tahap5,
-                        onTap: () {
-                          setState(() {
-                            tahap5 = !tahap5;
-                          });
-                        },
-                      ),
-                    ],
-                  ),
-                ),
-              ),
+              Expanded(child: _buildBody()),
             ],
           ),
+        ),
+      ),
+
+      floatingActionButton: _isLoading
+          ? null
+          : FloatingActionButton(
+        backgroundColor: primary,
+        onPressed: _addItem,
+        child: const Icon(
+          Icons.add,
+          color: Colors.white,
         ),
       ),
     ));

@@ -1,15 +1,128 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'file_service.dart';
 import 'jadwal_theme.dart';
 
-class DokumenPage extends StatelessWidget {
+class DokumenPage extends StatefulWidget {
   const DokumenPage({super.key});
 
   @override
-  Widget build(BuildContext context) {
-    const primary = Color(0xFF694A47);
-    const darkPrimary = Color(0xFF523B39);
-    const orange = Color(0xFF96C1C5);
+  State<DokumenPage> createState() => _DokumenPageState();
+}
 
+class _DokumenPageState extends State<DokumenPage> {
+  static const primary = Color(0xFF694A47);
+  static const darkPrimary = Color(0xFF523B39);
+  static const orange = Color(0xFF96C1C5);
+
+  List<StoredDocument> _documents = [];
+  bool _isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadDocuments();
+  }
+
+  // ---------------------------------------------------------------
+  // LOGIC
+  // ---------------------------------------------------------------
+
+  Future<void> _loadDocuments() async {
+    setState(() => _isLoading = true);
+
+    try {
+      final docs = await FileService.instance.getSavedDocuments();
+
+      if (!mounted) return;
+
+      setState(() {
+        _documents = docs;
+        _isLoading = false;
+      });
+    } on FileServiceException catch (e) {
+      if (!mounted) return;
+
+      setState(() => _isLoading = false);
+      _showMessage(e.message);
+    }
+  }
+
+  Future<void> _uploadDocument() async {
+    try {
+      final doc = await FileService.instance.pickAndSave();
+
+      if (doc == null) return;
+
+      await _loadDocuments();
+
+      _showMessage('${doc.name} berhasil disimpan.');
+    } on FileServiceException catch (e) {
+      _showMessage(e.message);
+    } catch (e) {
+      debugPrint('upload error: $e');
+      _showMessage('Terjadi kesalahan saat mengunggah dokumen.');
+    }
+  }
+
+  Future<void> _openDocument(StoredDocument doc) async {
+    try {
+      await FileService.instance.openDocument(doc.path);
+    } on FileServiceException catch (e) {
+      _showMessage(e.message);
+    }
+  }
+
+  Future<void> _confirmDelete(StoredDocument doc) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('Hapus dokumen?'),
+          content: Text(doc.name),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Batal'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text(
+                'Hapus',
+                style: TextStyle(color: primary),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (confirm != true) return;
+
+    try {
+      await FileService.instance.deleteDocument(doc.path);
+      await _loadDocuments();
+
+      _showMessage('Dokumen berhasil dihapus.');
+    } on FileServiceException catch (e) {
+      _showMessage(e.message);
+    }
+  }
+
+  void _showMessage(String message) {
+    if (!mounted) return;
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message)),
+    );
+  }
+
+  // ---------------------------------------------------------------
+  // UI
+  // ---------------------------------------------------------------
+
+  @override
+  Widget build(BuildContext context) {
     return AnimatedPage(child: Scaffold(
       body: Container(
         decoration: const BoxDecoration(
@@ -38,7 +151,7 @@ class DokumenPage extends StatelessWidget {
                         boxShadow: [
                           BoxShadow(
                             color:
-                                Colors.black.withOpacity(0.05),
+                            Colors.black.withOpacity(0.05),
                             blurRadius: 8,
                             offset: const Offset(0, 3),
                           ),
@@ -70,31 +183,7 @@ class DokumenPage extends StatelessWidget {
                 ),
               ),
 
-              Expanded(
-                child: SingleChildScrollView(
-                  padding: const EdgeInsets.all(15),
-                  child: Column(
-                    children: [
-                      documentCard(
-                        'Proposal Skripsi',
-                        'PDF • 2.4 MB',
-                      ),
-                      documentCard(
-                        'Bab 1 - Pendahuluan',
-                        'PDF • 1.8 MB',
-                      ),
-                      documentCard(
-                        'Bab 2 - Landasan Teori',
-                        'PDF • 2.1 MB',
-                      ),
-                      documentCard(
-                        'Bab 3 - Metodologi',
-                        'PDF • 1.9 MB',
-                      ),
-                    ],
-                  ),
-                ),
-              ),
+              Expanded(child: _buildBody()),
             ],
           ),
         ),
@@ -102,15 +191,7 @@ class DokumenPage extends StatelessWidget {
 
       floatingActionButton: FloatingActionButton(
         backgroundColor: primary,
-        onPressed: () {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text(
-                'Fitur tambah dokumen masih berupa tampilan.',
-              ),
-            ),
-          );
-        },
+        onPressed: _uploadDocument,
         child: const Icon(
           Icons.add,
           color: Colors.white,
@@ -119,65 +200,133 @@ class DokumenPage extends StatelessWidget {
     ));
   }
 
-  Widget documentCard(
-    String title,
-    String subtitle,
-  ) {
-    const orange = Color(0xFF96C1C5);
+  Widget _buildBody() {
+    if (_isLoading) {
+      return const Center(
+        child: CircularProgressIndicator(color: primary),
+      );
+    }
+
+    if (_documents.isEmpty) {
+      return const Center(
+        child: Padding(
+          padding: EdgeInsets.all(30),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                Icons.folder_open_rounded,
+                size: 64,
+                color: orange,
+              ),
+              SizedBox(height: 12),
+              Text(
+                'Belum ada dokumen',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  color: darkPrimary,
+                ),
+              ),
+              SizedBox(height: 4),
+              Text(
+                'Tekan tombol + untuk mengunggah dokumen.',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: Colors.grey,
+                  fontSize: 12,
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    return RefreshIndicator(
+      color: primary,
+      onRefresh: _loadDocuments,
+      child: ListView.builder(
+        padding: const EdgeInsets.fromLTRB(15, 15, 15, 90),
+        itemCount: _documents.length,
+        itemBuilder: (context, index) {
+          return documentCard(_documents[index]);
+        },
+      ),
+    );
+  }
+
+  Widget documentCard(StoredDocument doc) {
+    final isPdf = doc.extension == 'PDF';
 
     return Container(
       width: double.infinity,
       margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(20),
       ),
-      child: Row(
-        children: [
-          Container(
-            width: 48,
-            height: 48,
-            decoration: BoxDecoration(
-              color: const Color(0xFFEAF3F2),
-              borderRadius: BorderRadius.circular(14),
-            ),
-            child: const Icon(
-              Icons.picture_as_pdf_rounded,
-              color: orange,
-            ),
-          ),
-
-          const SizedBox(width: 12),
-
-          Expanded(
-            child: Column(
-              crossAxisAlignment:
-                  CrossAxisAlignment.start,
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(20),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(20),
+          onTap: () => _openDocument(doc),
+          onLongPress: () => _confirmDelete(doc),
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Row(
               children: [
-                Text(
-                  title,
-                  style: const TextStyle(
-                    fontWeight: FontWeight.bold,
+                Container(
+                  width: 48,
+                  height: 48,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFEAF3F2),
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: Icon(
+                    isPdf
+                        ? Icons.picture_as_pdf_rounded
+                        : Icons.description_rounded,
+                    color: orange,
                   ),
                 ),
-                const SizedBox(height: 4),
-                Text(
-                  subtitle,
-                  style: const TextStyle(
-                    color: Colors.grey,
-                    fontSize: 12,
+
+                const SizedBox(width: 12),
+
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment:
+                    CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        doc.title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        doc.subtitle,
+                        style: const TextStyle(
+                          color: Colors.grey,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ],
                   ),
+                ),
+
+                const Icon(
+                  Icons.open_in_new_rounded,
+                  color: orange,
                 ),
               ],
             ),
           ),
-
-          const Icon(
-            Icons.download_rounded,
-            color: orange,
-          ),
-        ],
+        ),
       ),
     );
   }
