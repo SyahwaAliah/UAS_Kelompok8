@@ -18,9 +18,10 @@ class DatabaseHelper {
     final filePath = join(dbPath, 'bimbingan_skripsi.db');
     return openDatabase(
       filePath,
-      version: 2,
+      version: 3,
       onConfigure: (db) async => db.execute('PRAGMA foreign_keys = ON'),
       onCreate: (db, version) async {
+        await _createNotificationsTable(db);
         await db.execute('''CREATE TABLE mahasiswa (
           id INTEGER PRIMARY KEY AUTOINCREMENT,
           nama TEXT NOT NULL,
@@ -82,6 +83,9 @@ class DatabaseHelper {
           )''');
           await db.execute('ALTER TABLE revisi ADD COLUMN deadline TEXT');
         }
+        if (oldVersion < 3) {
+          await _createNotificationsTable(db);
+        }
       },
     );
   }
@@ -119,5 +123,69 @@ class DatabaseHelper {
       await db.close();
       _database = null;
     }
+  }
+
+  Future<void> _createNotificationsTable(Database db) async {
+    await db.execute('''
+    CREATE TABLE IF NOT EXISTS notifications (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      type TEXT NOT NULL,
+      title TEXT NOT NULL,
+      description TEXT NOT NULL,
+      time TEXT NOT NULL,
+      is_read INTEGER NOT NULL DEFAULT 0
+    )
+  ''');
+  }
+  Future<int> simpanNotifikasi({
+    required String type,
+    required String title,
+    required String description,
+    required String time,
+  }) async {
+    final db = await database;
+
+    return db.insert('notifications', {
+      'type': type,
+      'title': title,
+      'description': description,
+      'time': time,
+      'is_read': 0,
+    });
+  }
+
+  Future<List<Map<String, Object?>>> ambilNotifikasi() async {
+    final db = await database;
+
+    return db.query(
+      'notifications',
+      orderBy: 'time DESC, id DESC',
+    );
+  }
+
+  Future<void> tandaiNotifikasiDibaca(int id) async {
+    final db = await database;
+
+    await db.update(
+      'notifications',
+      {'is_read': 1},
+      where: 'id = ?',
+      whereArgs: [id],
+    );
+  }
+
+  Future<void> tandaiSemuaNotifikasiDibaca() async {
+    final db = await database;
+
+    await db.update(
+      'notifications',
+      {'is_read': 1},
+    );
+  }
+
+  Future<void> hapusSemuaNotifikasi() async {
+    final db = await database;
+
+    await db.delete('notifications');
   }
 }

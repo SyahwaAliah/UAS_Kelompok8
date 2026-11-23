@@ -6,9 +6,6 @@ import 'chat_page.dart';
 import 'notification_page.dart';
 import 'video_call_page.dart';
 import 'jadwal_page.dart';
-import 'booking_jadwal_page.dart';
-import 'animated_button.dart';
-import 'database/database_helper.dart';
 import 'detailbimbingan_page.dart';
 import 'detailrevisi_page.dart';
 import 'notes_page.dart';
@@ -22,42 +19,20 @@ class DashboardPage extends StatefulWidget {
 
 class _DashboardPageState extends State<DashboardPage> {
   int selectedIndex = 0;
-  Map<String, dynamic>? jadwalBerikutnya;
 
-  @override
-  void initState() {
-    super.initState();
-    muatJadwalBerikutnya();
-  }
+  // Status awal mengikuti progress 60% (3 dari 5 tahap).
+  List<bool> statusTahapan = [true, true, true, false, false];
 
-  Future<void> muatJadwalBerikutnya() async {
-    final data = await DatabaseHelper.instance.ambilJadwal();
-    final sekarang = DateTime.now();
-    final mendatang = data.where((item) {
-      final tanggal = DateTime.tryParse((item['tanggal'] ?? '').toString());
-      return tanggal != null && !tanggal.isBefore(DateTime(sekarang.year, sekarang.month, sekarang.day));
-    }).toList();
+  int get jumlahSelesai =>
+      statusTahapan.where((selesai) => selesai).length;
 
-    if (!mounted) return;
+  int get persentaseProgress =>
+      ((jumlahSelesai / statusTahapan.length) * 100).round();
+
+  void perbaruiProgress(List<bool> statusBaru) {
     setState(() {
-      jadwalBerikutnya = mendatang.isEmpty ? null : mendatang.first;
+      statusTahapan = List<bool>.from(statusBaru);
     });
-  }
-
-  String tanggalJadwal() {
-    if (jadwalBerikutnya == null) return 'Belum ada jadwal';
-    final tanggal = DateTime.parse((jadwalBerikutnya!['tanggal'] ?? '').toString());
-    const bulan = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun',
-      'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
-    return '${tanggal.day} ${bulan[tanggal.month - 1]} ${tanggal.year}';
-  }
-
-  Future<void> bukaBookingJadwal() async {
-    await Navigator.push(
-      context,
-      MaterialPageRoute(builder: (context) => const BookingJadwalPage()),
-    );
-    muatJadwalBerikutnya();
   }
 
   static const Color olive = Color(0xFF694A47);
@@ -88,7 +63,11 @@ class _DashboardPageState extends State<DashboardPage> {
   }
 
   void bukaDetailRevisi() {
-    DetailRevisiPage.buka(context);
+    DetailRevisiPage.buka(
+      context,
+      statusAwal: statusTahapan,
+      onProgressChanged: perbaruiProgress,
+    );
   }
 
   void bukaNotes() {
@@ -291,7 +270,7 @@ class _DashboardPageState extends State<DashboardPage> {
       Navigator.push(
         context,
         MaterialPageRoute(builder: (context) => const JadwalPage()),
-      ).then((_) => muatJadwalBerikutnya()); // Perbarui ringkasan saat kembali.
+      );
       return;
     }
 
@@ -407,9 +386,9 @@ class _DashboardPageState extends State<DashboardPage> {
 
                           const SizedBox(height: 8),
 
-                          const Text(
-                            '60%',
-                            style: TextStyle(
+                          Text(
+                            '$persentaseProgress%',
+                            style: const TextStyle(
                               color: Colors.white,
                               fontSize: 34,
                               fontWeight: FontWeight.bold,
@@ -427,7 +406,7 @@ class _DashboardPageState extends State<DashboardPage> {
                             ),
                             child: FractionallySizedBox(
                               alignment: Alignment.centerLeft,
-                              widthFactor: 0.6,
+                              widthFactor: persentaseProgress / 100,
                               child: Container(
                                 decoration: BoxDecoration(
                                   color: orange,
@@ -439,9 +418,9 @@ class _DashboardPageState extends State<DashboardPage> {
 
                           const SizedBox(height: 10),
 
-                          const Text(
-                            '3 dari 5 tahapan selesai',
-                            style: TextStyle(
+                          Text(
+                            '$jumlahSelesai dari ${statusTahapan.length} tahapan selesai',
+                            style: const TextStyle(
                               color: Colors.white70,
                               fontSize: 12,
                             ),
@@ -486,9 +465,9 @@ class _DashboardPageState extends State<DashboardPage> {
                                     color: lightBlue,
                                     borderRadius: BorderRadius.circular(12),
                                   ),
-                                  child: Text(
-                                    jadwalBerikutnya == null ? 'KOSONG' : '${jadwalBerikutnya!['status']}'.toUpperCase(),
-                                    style: const TextStyle(
+                                  child: const Text(
+                                    'TERJADWAL',
+                                    style: TextStyle(
                                       color: olive,
                                       fontSize: 10,
                                       fontWeight: FontWeight.bold,
@@ -498,18 +477,21 @@ class _DashboardPageState extends State<DashboardPage> {
 
                                 const Spacer(),
 
-                                Text(
-                                  jadwalBerikutnya == null ? '--' : '${jadwalBerikutnya!['jam']} WIB',
-                                  style: const TextStyle(color: Colors.grey, fontSize: 12),
+                                const Text(
+                                  '10.00 WIB',
+                                  style: TextStyle(
+                                    color: Colors.grey,
+                                    fontSize: 12,
+                                  ),
                                 ),
                               ],
                             ),
 
                             const SizedBox(height: 13),
 
-                            Text(
-                              jadwalBerikutnya == null ? 'Belum ada booking' : 'Bimbingan Skripsi',
-                              style: const TextStyle(
+                            const Text(
+                              'Bimbingan Skripsi',
+                              style: TextStyle(
                                 color: darkOlive,
                                 fontSize: 17,
                                 fontWeight: FontWeight.bold,
@@ -518,14 +500,9 @@ class _DashboardPageState extends State<DashboardPage> {
 
                             const SizedBox(height: 6),
 
-                            Text(
-                              jadwalBerikutnya == null ? 'Silakan buat jadwal bimbingan.' : '${jadwalBerikutnya!['dosen']}',
-                              style: const TextStyle(color: Colors.grey),
-                            ),
-                            const SizedBox(height: 5),
-                            Text(
-                              tanggalJadwal(),
-                              style: const TextStyle(color: Colors.grey, fontSize: 12),
+                            const Text(
+                              'Dr. Budi Santoso',
+                              style: TextStyle(color: Colors.grey),
                             ),
 
                             const SizedBox(height: 8),
@@ -533,17 +510,18 @@ class _DashboardPageState extends State<DashboardPage> {
                             Row(
                               children: [
                                 const Icon(
-                                  Icons.video_call_outlined,
+                                  Icons.location_on_outlined,
                                   size: 17,
                                   color: orange,
                                 ),
 
                                 const SizedBox(width: 5),
 
-                                Expanded(
-                                  child: Text(
-                                    jadwalBerikutnya == null ? 'Tanggal bimbingan belum dipilih' : '${jadwalBerikutnya!['mode']}',
-                                    style: const TextStyle(color: Colors.grey, fontSize: 12),
+                                const Text(
+                                  'Ruang Dosen Lt. 3',
+                                  style: TextStyle(
+                                    color: Colors.grey,
+                                    fontSize: 12,
                                   ),
                                 ),
                               ],
@@ -551,14 +529,6 @@ class _DashboardPageState extends State<DashboardPage> {
                           ],
                         ),
                       ),
-                    ),
-
-                    const SizedBox(height: 14),
-
-                    AnimatedButton(
-                      text: 'Booking Jadwal Baru',
-                      icon: Icons.add,
-                      onPressed: bukaBookingJadwal,
                     ),
 
                     const SizedBox(height: 28),

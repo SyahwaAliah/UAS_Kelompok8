@@ -3,13 +3,15 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:timezone/data/latest_all.dart' as tz_data;
 import 'package:timezone/timezone.dart' as tz;
 
-// -------------------------------------------------------------------
-// MODEL
-// -------------------------------------------------------------------
+import 'database/database_helper.dart';
 
-enum NotificationType { jadwal, revisi, pesan, selesai }
+enum NotificationType {
+  jadwal,
+  revisi,
+  pesan,
+  selesai,
+}
 
-/// Satu item di daftar notifikasi (halaman notification_page.dart).
 class AppNotification {
   final int id;
   final NotificationType type;
@@ -27,6 +29,20 @@ class AppNotification {
     this.isRead = false,
   });
 
+  factory AppNotification.fromMap(Map<String, Object?> map) {
+    return AppNotification(
+      id: map['id'] as int,
+      type: NotificationType.values.firstWhere(
+            (value) => value.name == map['type'],
+        orElse: () => NotificationType.pesan,
+      ),
+      title: map['title'] as String,
+      description: map['description'] as String,
+      time: DateTime.parse(map['time'] as String),
+      isRead: (map['is_read'] as int? ?? 0) == 1,
+    );
+  }
+
   AppNotification copyWith({bool? isRead}) {
     return AppNotification(
       id: id,
@@ -38,70 +54,62 @@ class AppNotification {
     );
   }
 
-  /// Label waktu, contoh: Hari ini, Kemarin, 3 hari lalu
   String get timeLabel {
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
     final date = DateTime(time.year, time.month, time.day);
-    final diff = today.difference(date).inDays;
 
-    if (diff <= 0) return 'Hari ini';
-    if (diff == 1) return 'Kemarin';
-    return '$diff hari lalu';
+    final difference = date.difference(today).inDays;
+
+    if (difference < 0) return 'Sudah lewat';
+    if (difference == 0) return 'Hari ini';
+    if (difference == 1) return 'Kemarin';
+
+    return '$difference hari yang lalu';
   }
 }
 
-// -------------------------------------------------------------------
-// SERVICE
-// -------------------------------------------------------------------
-
-/// Cukup diinisialisasi SATU KALI di main.dart.
-/// Setelah itu dipanggil dari halaman mana pun lewat
-/// NotificationService.instance (tidak perlu di-copy ke tiap halaman).
 class NotificationService {
   NotificationService._();
 
   static final NotificationService instance = NotificationService._();
 
-  static const String _channelId = 'skripsi_channel';
-  static const String _channelName = 'Pengingat Skripsi';
-  static const String _channelDesc =
-      'Pengingat jadwal bimbingan dan deadline revisi';
+  static const String channelId = 'skripsi_channel';
+  static const String channelName = 'Pengingat Skripsi';
+  static const String channelDescription =
+      'Notifikasi informasi dan pengingat bimbingan skripsi';
 
   final FlutterLocalNotificationsPlugin _plugin =
-      FlutterLocalNotificationsPlugin();
+  FlutterLocalNotificationsPlugin();
+
+  final ValueNotifier<List<AppNotification>> notifications =
+  ValueNotifier<List<AppNotification>>([]);
 
   bool _initialized = false;
 
-  /// Notifikasi sistem hanya aktif di Android & iOS.
-  /// Di platform lain (Chrome, Windows) daftar notifikasi
-  /// di dalam aplikasi tetap berjalan.
   bool get _supported =>
       !kIsWeb &&
-      (defaultTargetPlatform == TargetPlatform.android ||
-          defaultTargetPlatform == TargetPlatform.iOS);
+          (defaultTargetPlatform == TargetPlatform.android ||
+              defaultTargetPlatform == TargetPlatform.iOS);
 
-  static const NotificationDetails _details = NotificationDetails(
+  static const NotificationDetails _notificationDetails =
+  NotificationDetails(
     android: AndroidNotificationDetails(
-      _channelId,
-      _channelName,
-      channelDescription: _channelDesc,
+      channelId,
+      channelName,
+      channelDescription: channelDescription,
       importance: Importance.high,
       priority: Priority.high,
     ),
     iOS: DarwinNotificationDetails(),
   );
 
-  // ---------------------------------------------------------------
-  // INIT & IZIN
-  // ---------------------------------------------------------------
-
+  // Initialize the notification plugin.
   Future<void> init() async {
     if (_initialized || !_supported) return;
 
     try {
       tz_data.initializeTimeZones();
-      // Zona waktu tetap WIB. Ganti jika aplikasi dipakai di zona lain.
       tz.setLocalLocation(tz.getLocation('Asia/Jakarta'));
 
       const settings = InitializationSettings(
@@ -116,218 +124,171 @@ class NotificationService {
       await _plugin.initialize(settings: settings);
 
       _initialized = true;
-    } catch (e) {
-      debugPrint('NotificationService init error: $e');
+
+      await _reloadHistory();
+    } catch (error) {
+      debugPrint('Notification initialization error: $error');
     }
   }
 
-  /// Meminta izin notifikasi (Android 13+ dan iOS).
+  // Request permission to display notifications.
   Future<bool> requestPermission() async {
     if (!_initialized) return false;
 
     try {
-      final android = _plugin
-          .resolvePlatformSpecificImplementation<
-            AndroidFlutterLocalNotificationsPlugin
-          >();
+      final android = _plugin.resolvePlatformSpecificImplementation<
+          AndroidFlutterLocalNotificationsPlugin>();
 
       if (android != null) {
         return await android.requestNotificationsPermission() ?? false;
       }
 
-      final ios = _plugin
-          .resolvePlatformSpecificImplementation<
-            IOSFlutterLocalNotificationsPlugin
-          >();
+      final ios = _plugin.resolvePlatformSpecificImplementation<
+          IOSFlutterLocalNotificationsPlugin>();
 
       return await ios?.requestPermissions(
-            alert: true,
-            badge: true,
-            sound: true,
-          ) ??
+        alert: true,
+        badge: true,
+        sound: true,
+      ) ??
           false;
-    } catch (e) {
-      debugPrint('requestPermission error: $e');
+    } catch (error) {
+      debugPrint('Notification permission error: $error');
       return false;
     }
   }
 
-  // ---------------------------------------------------------------
-  // PENGINGAT TERJADWAL
-  // ---------------------------------------------------------------
-
-  /// Pengingat jadwal bimbingan. Default: 1 jam sebelum waktu bimbingan.
-  /// Mengembalikan false jika waktu pengingat sudah lewat atau gagal.
-  Future<bool> scheduleBimbingan({
-    required int id,
-    required DateTime waktuBimbingan,
-    String? dosen,
-    Duration sebelum = const Duration(hours: 1),
-  }) {
-    return _schedule(
-      id: id,
-      title: 'Jadwal Bimbingan',
-      body: dosen == null
-          ? 'Bimbingan kamu akan segera dimulai.'
-          : 'Bimbingan dengan $dosen akan segera dimulai.',
-      when: waktuBimbingan.subtract(sebelum),
-    );
-  }
-
-  /// Pengingat deadline revisi. Default: 1 hari sebelum deadline.
-  Future<bool> scheduleDeadlineRevisi({
-    required int id,
-    required DateTime deadline,
-    String? bab,
-    Duration sebelum = const Duration(days: 1),
-  }) {
-    return _schedule(
-      id: id,
-      title: 'Deadline Revisi',
-      body: bab == null
-          ? 'Deadline revisi kamu sudah dekat.'
-          : 'Deadline revisi $bab sudah dekat.',
-      when: deadline.subtract(sebelum),
-    );
-  }
-
-  Future<bool> _schedule({
-    required int id,
+  // Save a notification to the in-app notification history.
+  Future<int> addInAppNotification({
+    required NotificationType type,
     required String title,
-    required String body,
-    required DateTime when,
+    required String description,
   }) async {
-    if (!_initialized) return false;
+    final id = await DatabaseHelper.instance.simpanNotifikasi(
+      type: type.name,
+      title: title,
+      description: description,
+      time: DateTime.now().toIso8601String(),
+    );
 
-    if (when.isBefore(DateTime.now())) return false;
+    await _reloadHistory();
 
-    try {
-      await _plugin.zonedSchedule(
-        id: id,
-        title: title,
-        body: body,
-        scheduledDate: tz.TZDateTime.from(when, tz.local),
-        notificationDetails: _details,
-        androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
-      );
-
-      return true;
-    } catch (e) {
-      debugPrint('schedule error: $e');
-      return false;
-    }
+    return id;
   }
 
-  Future<void> cancel(int id) async {
-    if (!_initialized) return;
-
-    await _plugin.cancel(id: id);
-  }
-
-  Future<void> cancelAll() async {
-    if (!_initialized) return;
-
-    await _plugin.cancelAll();
-  }
-
-  // ---------------------------------------------------------------
-  // RIWAYAT NOTIFIKASI (untuk notification_page.dart)
-  // ---------------------------------------------------------------
-
-  /// Sementara disimpan di memori (hilang saat aplikasi ditutup).
-  /// Nanti bisa dipindah ke sqflite. Data awal di bawah hanya contoh,
-  /// hapus _sampleData() jika sudah tidak diperlukan.
-  final ValueNotifier<List<AppNotification>> notifications =
-      ValueNotifier<List<AppNotification>>(_sampleData());
-
-  int _nextId = 100;
-
-  int get unreadCount => notifications.value.where((n) => !n.isRead).length;
-
-  /// Menampilkan notifikasi sekarang sekaligus mencatatnya ke riwayat.
+  // Save a notification and immediately display it on the device.
   Future<void> showNow({
     required NotificationType type,
     required String title,
     required String description,
   }) async {
-    final id = _nextId++;
+    int notificationId;
 
-    notifications.value = [
-      AppNotification(
-        id: id,
+    try {
+      notificationId = await addInAppNotification(
         type: type,
         title: title,
         description: description,
-        time: DateTime.now(),
-      ),
-      ...notifications.value,
-    ];
+      );
+    } catch (error) {
+      debugPrint('Failed to save notification history: $error');
 
-    if (!_initialized) return;
+      notificationId =
+          DateTime.now().millisecondsSinceEpoch % 2000000000;
+    }
+
+    if (!_initialized || !_supported) return;
 
     try {
       await _plugin.show(
-        id: id,
+        id: notificationId,
         title: title,
         body: description,
-        notificationDetails: _details,
+        notificationDetails: _notificationDetails,
       );
-    } catch (e) {
-      debugPrint('showNow error: $e');
+    } catch (error) {
+      debugPrint('Failed to show notification: $error');
     }
   }
 
-  void markAsRead(int id) {
-    notifications.value = [
-      for (final n in notifications.value)
-        if (n.id == id) n.copyWith(isRead: true) else n,
-    ];
+  // Schedule a generic notification for a future date and time.
+  Future<bool> scheduleNotification({
+    required int id,
+    required String title,
+    required String description,
+    required DateTime scheduledTime,
+  }) async {
+    if (!_initialized || !_supported) return false;
+
+    final scheduledDate = tz.TZDateTime(
+      tz.local,
+      scheduledTime.year,
+      scheduledTime.month,
+      scheduledTime.day,
+      scheduledTime.hour,
+      scheduledTime.minute,
+    );
+
+    if (scheduledDate.isBefore(tz.TZDateTime.now(tz.local))) {
+      return false;
+    }
+
+    try {
+      await _plugin.zonedSchedule(
+        id: id,
+        title: title,
+        body: description,
+        scheduledDate: scheduledDate,
+        notificationDetails: _notificationDetails,
+        androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
+      );
+
+      return true;
+    } catch (error) {
+      debugPrint('Failed to schedule notification: $error');
+      return false;
+    }
   }
 
-  void markAllAsRead() {
-    notifications.value = [
-      for (final n in notifications.value) n.copyWith(isRead: true),
-    ];
+  // Cancel a scheduled notification using its ID.
+  Future<void> cancelScheduledNotification(int id) async {
+    if (!_initialized) return;
+
+    await _plugin.cancel(id: id);
   }
 
-  void clearAll() {
-    notifications.value = [];
+  // Mark one notification as read.
+  Future<void> markAsRead(int id) async {
+    await DatabaseHelper.instance.tandaiNotifikasiDibaca(id);
+    await _reloadHistory();
   }
 
-  static List<AppNotification> _sampleData() {
-    final now = DateTime.now();
+  // Mark all notifications as read.
+  Future<void> markAllAsRead() async {
+    await DatabaseHelper.instance.tandaiSemuaNotifikasiDibaca();
+    await _reloadHistory();
+  }
 
-    return [
-      AppNotification(
-        id: 1,
-        type: NotificationType.jadwal,
-        title: 'Jadwal Bimbingan',
-        description: 'Bimbingan kamu dijadwalkan pada Senin, 12 Oktober 2026 pukul 09.00.',
-        time: now,
-      ),
-      AppNotification(
-        id: 2,
-        type: NotificationType.revisi,
-        title: 'Revisi Baru',
-        description: 'Dosen memberikan revisi pada Bab 3. Silakan cek detail revisi kamu.',
-        time: now.subtract(const Duration(days: 1)),
-        isRead: true,
-      ),
-      AppNotification(
-        id: 3,
-        type: NotificationType.pesan,
-        title: 'Pesan Baru',
-        description: 'Dr. Budi Santoso mengirimkan pesan baru melalui chat.',
-        time: now.subtract(const Duration(days: 2)),
-      ),
-      AppNotification(
-        id: 4,
-        type: NotificationType.selesai,
-        title: 'Bimbingan Selesai',
-        description: 'Sesi bimbingan sebelumnya telah selesai. Lihat riwayat bimbingan untuk detail.',
-        time: now.subtract(const Duration(days: 3)),
-        isRead: true,
-      ),
-    ];
+  // Delete all notification history.
+  Future<void> clearAll() async {
+    await DatabaseHelper.instance.hapusSemuaNotifikasi();
+    await _reloadHistory();
+  }
+
+  int get unreadCount =>
+      notifications.value.where((item) => !item.isRead).length;
+
+  // Retrieve notification history from SQLite.
+  Future<void> _reloadHistory() async {
+    try {
+      final rows =
+      await DatabaseHelper.instance.ambilNotifikasi();
+
+      notifications.value = rows
+          .map((row) => AppNotification.fromMap(row))
+          .toList();
+    } catch (error) {
+      debugPrint('Failed to load notification history: $error');
+    }
   }
 }

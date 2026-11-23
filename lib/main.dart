@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'notification_service.dart';
 import 'dashboard_page.dart';
 
 /*
@@ -10,8 +11,12 @@ cd /d "D:\Semester 5\Moprog\UAS" (lokasi folder project)
 flutter emulators --launch Medium_Phone
 flutter run -d emulator-5554
 */
-void main() {
+Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  await NotificationService.instance.init();
+  await NotificationService.instance.requestPermission();
+
   runApp(const MyApp());
 }
 
