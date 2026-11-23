@@ -201,7 +201,7 @@ Karena halaman utama aplikasi sudah dibuat, pengembangan berikutnya difokuskan p
 - Memastikan data tetap tersimpan setelah aplikasi ditutup.
 - Menguji proses penyimpanan dan pengambilan data.
 
-### 👩‍💻 Anggota 2 — Kalender, Booking & Animasi
+### 👩‍💻 Tracy — Kalender, Booking & Animasi
 
 **File Dart yang perlu ditambahkan:**
 
@@ -223,7 +223,8 @@ Karena halaman utama aplikasi sudah dibuat, pengembangan berikutnya difokuskan p
 - Memastikan tampilan kalender responsif.
 - Mengintegrasikan komponen baru dengan halaman yang sudah tersedia.
 
-### 👩‍💻 Anggota 3 — Fitur Pendukung Mahasiswa
+### 👩‍💻 Albert
+— Fitur Pendukung Mahasiswa
 
 **File Dart yang perlu ditambahkan:**
 
