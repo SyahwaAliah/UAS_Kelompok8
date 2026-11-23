@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'revisi_database_page.dart';
 
 class DetailRevisiPage {
   static const Color maroon = Color(0xFF694A47);
@@ -30,6 +31,17 @@ class DetailRevisiPage {
               crossAxisAlignment:
                   CrossAxisAlignment.start,
               children: [
+                Align(alignment: Alignment.centerRight,
+                  child: TextButton.icon(
+                    onPressed: () {
+                      Navigator.of(context).pop();
+                      Navigator.of(context).push(MaterialPageRoute(
+                        builder: (_) => const RevisiDatabasePage()));
+                    },
+                    icon: const Icon(Icons.edit_note),
+                    label: const Text('Kelola Revisi (SQLite)'),
+                  ),
+                ),
                 const Text(
                   'Detail Revisi Bimbingan',
                   style: TextStyle(

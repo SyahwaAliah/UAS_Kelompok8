@@ -6,6 +6,9 @@ import 'chat_page.dart';
 import 'notification_page.dart';
 import 'video_call_page.dart';
 import 'jadwal_page.dart';
+import 'booking_jadwal_page.dart';
+import 'animated_button.dart';
+import 'database/database_helper.dart';
 import 'detailbimbingan_page.dart';
 import 'detailrevisi_page.dart';
 import 'notes_page.dart';
@@ -19,6 +22,43 @@ class DashboardPage extends StatefulWidget {
 
 class _DashboardPageState extends State<DashboardPage> {
   int selectedIndex = 0;
+  Map<String, dynamic>? jadwalBerikutnya;
+
+  @override
+  void initState() {
+    super.initState();
+    muatJadwalBerikutnya();
+  }
+
+  Future<void> muatJadwalBerikutnya() async {
+    final data = await DatabaseHelper.instance.ambilJadwal();
+    final sekarang = DateTime.now();
+    final mendatang = data.where((item) {
+      final tanggal = DateTime.tryParse((item['tanggal'] ?? '').toString());
+      return tanggal != null && !tanggal.isBefore(DateTime(sekarang.year, sekarang.month, sekarang.day));
+    }).toList();
+
+    if (!mounted) return;
+    setState(() {
+      jadwalBerikutnya = mendatang.isEmpty ? null : mendatang.first;
+    });
+  }
+
+  String tanggalJadwal() {
+    if (jadwalBerikutnya == null) return 'Belum ada jadwal';
+    final tanggal = DateTime.parse((jadwalBerikutnya!['tanggal'] ?? '').toString());
+    const bulan = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun',
+      'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
+    return '${tanggal.day} ${bulan[tanggal.month - 1]} ${tanggal.year}';
+  }
+
+  Future<void> bukaBookingJadwal() async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => const BookingJadwalPage()),
+    );
+    muatJadwalBerikutnya();
+  }
 
   static const Color olive = Color(0xFF694A47);
   static const Color darkOlive = Color(0xFF523B39);
@@ -251,7 +291,7 @@ class _DashboardPageState extends State<DashboardPage> {
       Navigator.push(
         context,
         MaterialPageRoute(builder: (context) => const JadwalPage()),
-      );
+      ).then((_) => muatJadwalBerikutnya()); // Perbarui ringkasan saat kembali.
       return;
     }
 
@@ -446,9 +486,9 @@ class _DashboardPageState extends State<DashboardPage> {
                                     color: lightBlue,
                                     borderRadius: BorderRadius.circular(12),
                                   ),
-                                  child: const Text(
-                                    'TERJADWAL',
-                                    style: TextStyle(
+                                  child: Text(
+                                    jadwalBerikutnya == null ? 'KOSONG' : '${jadwalBerikutnya!['status']}'.toUpperCase(),
+                                    style: const TextStyle(
                                       color: olive,
                                       fontSize: 10,
                                       fontWeight: FontWeight.bold,
@@ -458,21 +498,18 @@ class _DashboardPageState extends State<DashboardPage> {
 
                                 const Spacer(),
 
-                                const Text(
-                                  '10.00 WIB',
-                                  style: TextStyle(
-                                    color: Colors.grey,
-                                    fontSize: 12,
-                                  ),
+                                Text(
+                                  jadwalBerikutnya == null ? '--' : '${jadwalBerikutnya!['jam']} WIB',
+                                  style: const TextStyle(color: Colors.grey, fontSize: 12),
                                 ),
                               ],
                             ),
 
                             const SizedBox(height: 13),
 
-                            const Text(
-                              'Bimbingan Skripsi',
-                              style: TextStyle(
+                            Text(
+                              jadwalBerikutnya == null ? 'Belum ada booking' : 'Bimbingan Skripsi',
+                              style: const TextStyle(
                                 color: darkOlive,
                                 fontSize: 17,
                                 fontWeight: FontWeight.bold,
@@ -481,9 +518,14 @@ class _DashboardPageState extends State<DashboardPage> {
 
                             const SizedBox(height: 6),
 
-                            const Text(
-                              'Dr. Budi Santoso',
-                              style: TextStyle(color: Colors.grey),
+                            Text(
+                              jadwalBerikutnya == null ? 'Silakan buat jadwal bimbingan.' : '${jadwalBerikutnya!['dosen']}',
+                              style: const TextStyle(color: Colors.grey),
+                            ),
+                            const SizedBox(height: 5),
+                            Text(
+                              tanggalJadwal(),
+                              style: const TextStyle(color: Colors.grey, fontSize: 12),
                             ),
 
                             const SizedBox(height: 8),
@@ -491,18 +533,17 @@ class _DashboardPageState extends State<DashboardPage> {
                             Row(
                               children: [
                                 const Icon(
-                                  Icons.location_on_outlined,
+                                  Icons.video_call_outlined,
                                   size: 17,
                                   color: orange,
                                 ),
 
                                 const SizedBox(width: 5),
 
-                                const Text(
-                                  'Ruang Dosen Lt. 3',
-                                  style: TextStyle(
-                                    color: Colors.grey,
-                                    fontSize: 12,
+                                Expanded(
+                                  child: Text(
+                                    jadwalBerikutnya == null ? 'Tanggal bimbingan belum dipilih' : '${jadwalBerikutnya!['mode']}',
+                                    style: const TextStyle(color: Colors.grey, fontSize: 12),
                                   ),
                                 ),
                               ],
@@ -510,6 +551,14 @@ class _DashboardPageState extends State<DashboardPage> {
                           ],
                         ),
                       ),
+                    ),
+
+                    const SizedBox(height: 14),
+
+                    AnimatedButton(
+                      text: 'Booking Jadwal Baru',
+                      icon: Icons.add,
+                      onPressed: bukaBookingJadwal,
                     ),
 
                     const SizedBox(height: 28),

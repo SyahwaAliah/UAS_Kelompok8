@@ -7,12 +7,7 @@ import 'package:timezone/timezone.dart' as tz;
 // MODEL
 // -------------------------------------------------------------------
 
-enum NotificationType {
-  jadwal,
-  revisi,
-  pesan,
-  selesai,
-}
+enum NotificationType { jadwal, revisi, pesan, selesai }
 
 /// Satu item di daftar notifikasi (halaman notification_page.dart).
 class AppNotification {
@@ -74,7 +69,7 @@ class NotificationService {
       'Pengingat jadwal bimbingan dan deadline revisi';
 
   final FlutterLocalNotificationsPlugin _plugin =
-  FlutterLocalNotificationsPlugin();
+      FlutterLocalNotificationsPlugin();
 
   bool _initialized = false;
 
@@ -83,8 +78,8 @@ class NotificationService {
   /// di dalam aplikasi tetap berjalan.
   bool get _supported =>
       !kIsWeb &&
-          (defaultTargetPlatform == TargetPlatform.android ||
-              defaultTargetPlatform == TargetPlatform.iOS);
+      (defaultTargetPlatform == TargetPlatform.android ||
+          defaultTargetPlatform == TargetPlatform.iOS);
 
   static const NotificationDetails _details = NotificationDetails(
     android: AndroidNotificationDetails(
@@ -118,7 +113,7 @@ class NotificationService {
         ),
       );
 
-      await _plugin.initialize(settings);
+      await _plugin.initialize(settings: settings);
 
       _initialized = true;
     } catch (e) {
@@ -131,21 +126,25 @@ class NotificationService {
     if (!_initialized) return false;
 
     try {
-      final android = _plugin.resolvePlatformSpecificImplementation<
-          AndroidFlutterLocalNotificationsPlugin>();
+      final android = _plugin
+          .resolvePlatformSpecificImplementation<
+            AndroidFlutterLocalNotificationsPlugin
+          >();
 
       if (android != null) {
         return await android.requestNotificationsPermission() ?? false;
       }
 
-      final ios = _plugin.resolvePlatformSpecificImplementation<
-          IOSFlutterLocalNotificationsPlugin>();
+      final ios = _plugin
+          .resolvePlatformSpecificImplementation<
+            IOSFlutterLocalNotificationsPlugin
+          >();
 
       return await ios?.requestPermissions(
-        alert: true,
-        badge: true,
-        sound: true,
-      ) ??
+            alert: true,
+            badge: true,
+            sound: true,
+          ) ??
           false;
     } catch (e) {
       debugPrint('requestPermission error: $e');
@@ -204,9 +203,11 @@ class NotificationService {
 
     try {
       await _plugin.zonedSchedule(
-        id, title, body,
-        tz.TZDateTime.from(when, tz.local),
-        _details,
+        id: id,
+        title: title,
+        body: body,
+        scheduledDate: tz.TZDateTime.from(when, tz.local),
+        notificationDetails: _details,
         androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
       );
 
@@ -220,7 +221,7 @@ class NotificationService {
   Future<void> cancel(int id) async {
     if (!_initialized) return;
 
-    await _plugin.cancel(id);
+    await _plugin.cancel(id: id);
   }
 
   Future<void> cancelAll() async {
@@ -237,12 +238,11 @@ class NotificationService {
   /// Nanti bisa dipindah ke sqflite. Data awal di bawah hanya contoh,
   /// hapus _sampleData() jika sudah tidak diperlukan.
   final ValueNotifier<List<AppNotification>> notifications =
-  ValueNotifier<List<AppNotification>>(_sampleData());
+      ValueNotifier<List<AppNotification>>(_sampleData());
 
   int _nextId = 100;
 
-  int get unreadCount =>
-      notifications.value.where((n) => !n.isRead).length;
+  int get unreadCount => notifications.value.where((n) => !n.isRead).length;
 
   /// Menampilkan notifikasi sekarang sekaligus mencatatnya ke riwayat.
   Future<void> showNow({
@@ -266,7 +266,12 @@ class NotificationService {
     if (!_initialized) return;
 
     try {
-      await _plugin.show(id, title, description, _details);
+      await _plugin.show(
+        id: id,
+        title: title,
+        body: description,
+        notificationDetails: _details,
+      );
     } catch (e) {
       debugPrint('showNow error: $e');
     }
@@ -297,16 +302,14 @@ class NotificationService {
         id: 1,
         type: NotificationType.jadwal,
         title: 'Jadwal Bimbingan',
-        description:
-        'Bimbingan kamu dijadwalkan pada Senin, 12 Oktober 2026 pukul 09.00.',
+        description: 'Bimbingan kamu dijadwalkan pada Senin, 12 Oktober 2026 pukul 09.00.',
         time: now,
       ),
       AppNotification(
         id: 2,
         type: NotificationType.revisi,
         title: 'Revisi Baru',
-        description:
-        'Dosen memberikan revisi pada Bab 3. Silakan cek detail revisi kamu.',
+        description: 'Dosen memberikan revisi pada Bab 3. Silakan cek detail revisi kamu.',
         time: now.subtract(const Duration(days: 1)),
         isRead: true,
       ),
@@ -321,8 +324,7 @@ class NotificationService {
         id: 4,
         type: NotificationType.selesai,
         title: 'Bimbingan Selesai',
-        description:
-        'Sesi bimbingan sebelumnya telah selesai. Lihat riwayat bimbingan untuk detail.',
+        description: 'Sesi bimbingan sebelumnya telah selesai. Lihat riwayat bimbingan untuk detail.',
         time: now.subtract(const Duration(days: 3)),
         isRead: true,
       ),

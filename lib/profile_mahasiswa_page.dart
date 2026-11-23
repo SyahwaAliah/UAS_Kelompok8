@@ -3,9 +3,86 @@ import 'jadwal_theme.dart';
 
 import 'checklist_page.dart';
 import 'dokumen_page.dart';
+import 'models/mahasiswa_model.dart';
+import 'repositories/mahasiswa_repository.dart';
 
-class ProfileMahasiswaPage extends StatelessWidget {
+class ProfileMahasiswaPage extends StatefulWidget {
   const ProfileMahasiswaPage({super.key});
+
+  @override
+  State<ProfileMahasiswaPage> createState() => _ProfileMahasiswaPageState();
+}
+
+class _ProfileMahasiswaPageState extends State<ProfileMahasiswaPage> {
+  final _repo = MahasiswaRepository();
+  MahasiswaModel? _profile;
+
+  @override
+  void initState() {
+    super.initState();
+    _refreshProfile();
+  }
+
+  Future<void> _refreshProfile() async {
+    try {
+      final rows = await _repo.semua();
+      if (!mounted) return;
+      setState(() => _profile = rows.isEmpty ? null : rows.first);
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Gagal memuat profil: $e')),
+      );
+    }
+  }
+
+  Future<void> _editProfile() async {
+    final name = TextEditingController(text: _profile?.nama ?? '');
+    final nim = TextEditingController(text: _profile?.nim ?? '');
+    final prodi = TextEditingController(text: _profile?.prodi ?? '');
+    final judul = TextEditingController(text: _profile?.judulSkripsi ?? '');
+    final email = TextEditingController(text: _profile?.email ?? '');
+    final result = await showDialog<bool>(context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Edit Profil Mahasiswa'),
+        content: SingleChildScrollView(child: Column(mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(controller: name, decoration: const InputDecoration(labelText: 'Nama')),
+            TextField(controller: nim, decoration: const InputDecoration(labelText: 'NIM')),
+            TextField(controller: prodi, decoration: const InputDecoration(labelText: 'Prodi')),
+            TextField(controller: email, decoration: const InputDecoration(labelText: 'Email')),
+            TextField(controller: judul, decoration: const InputDecoration(labelText: 'Judul Skripsi')),
+          ],
+        )),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Batal')),
+          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Simpan')),
+        ],
+      ),
+    );
+    if (result == true) {
+      if (name.text.trim().isEmpty || nim.text.trim().isEmpty) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Nama dan NIM wajib diisi')));
+      } else {
+        try {
+          final data = MahasiswaModel(id: _profile?.id,
+            nama: name.text.trim(), nim: nim.text.trim(),
+            prodi: prodi.text.trim(), email: email.text.trim(),
+            judulSkripsi: judul.text.trim(), semester: _profile?.semester ?? 1);
+          if (_profile == null) { await _repo.tambah(data); }
+          else { await _repo.ubah(data); }
+          await _refreshProfile();
+        } catch (e) {
+          if (!mounted) return;
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Gagal menyimpan profil: $e')));
+        }
+      }
+    }
+    name.dispose(); nim.dispose(); prodi.dispose(); judul.dispose(); email.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -101,8 +178,8 @@ class ProfileMahasiswaPage extends StatelessWidget {
 
                 const SizedBox(height: 15),
 
-                const Text(
-                  'Syahwa',
+                Text(
+                  _profile?.nama ?? 'Belum diisi',
                   style: TextStyle(
                     fontSize: 22,
                     fontWeight: FontWeight.bold,
@@ -137,7 +214,7 @@ class ProfileMahasiswaPage extends StatelessWidget {
                       ),
                     ],
                   ),
-                  child: const Column(
+                  child: Column(
                     crossAxisAlignment:
                         CrossAxisAlignment.start,
                     children: [
@@ -163,7 +240,7 @@ class ProfileMahasiswaPage extends StatelessWidget {
                       SizedBox(height: 4),
 
                       Text(
-                        '123456789',
+                        _profile?.nim ?? '-',
                         style: TextStyle(
                           fontWeight: FontWeight.bold,
                         ),
@@ -182,7 +259,7 @@ class ProfileMahasiswaPage extends StatelessWidget {
                       SizedBox(height: 4),
 
                       Text(
-                        'Sistem Informasi',
+                        _profile?.prodi ?? '-',
                         style: TextStyle(
                           fontWeight: FontWeight.bold,
                         ),
@@ -201,7 +278,7 @@ class ProfileMahasiswaPage extends StatelessWidget {
                       SizedBox(height: 4),
 
                       Text(
-                        'Pengembangan Aplikasi Bimbingan Skripsi Berbasis Mobile',
+                        _profile?.judulSkripsi ?? '-',
                         style: TextStyle(
                           fontWeight: FontWeight.bold,
                         ),
@@ -352,16 +429,7 @@ class ProfileMahasiswaPage extends StatelessWidget {
                             BorderRadius.circular(16),
                       ),
                     ),
-                    onPressed: () {
-                      ScaffoldMessenger.of(context)
-                          .showSnackBar(
-                        const SnackBar(
-                          content: Text(
-                            'Fitur Edit Profil masih berupa tampilan.',
-                          ),
-                        ),
-                      );
-                    },
+                    onPressed: _editProfile,
                     icon: const Icon(Icons.edit),
                     label:
                         const Text('Edit Profil'),
