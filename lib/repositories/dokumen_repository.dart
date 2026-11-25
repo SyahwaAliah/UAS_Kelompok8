@@ -3,7 +3,8 @@ import '../models/dokumen_model.dart';
 
 class DokumenRepository {
   final DatabaseHelper _helper;
-  DokumenRepository([DatabaseHelper? helper]) : _helper = helper ?? DatabaseHelper.instance;
+  DokumenRepository([DatabaseHelper? helper])
+    : _helper = helper ?? DatabaseHelper.instance;
 
   Future<int> tambah(DokumenModel item) async {
     final db = await _helper.database;
@@ -18,16 +19,24 @@ class DokumenRepository {
 
   Future<DokumenModel?> berdasarkanId(int id) async {
     final db = await _helper.database;
-    final rows = await db.query('dokumen',
-        where: 'id = ?', whereArgs: [id], limit: 1);
+    final rows = await db.query(
+      'dokumen',
+      where: 'id = ?',
+      whereArgs: [id],
+      limit: 1,
+    );
     return rows.isEmpty ? null : DokumenModel.fromMap(rows.first);
   }
 
   Future<int> ubah(DokumenModel item) async {
     if (item.id == null) throw ArgumentError('ID diperlukan untuk update');
     final db = await _helper.database;
-    return db.update('dokumen', item.toMap(),
-        where: 'id = ?', whereArgs: [item.id]);
+    return db.update(
+      'dokumen',
+      item.toMap(),
+      where: 'id = ?',
+      whereArgs: [item.id],
+    );
   }
 
   Future<int> hapus(int id) async {

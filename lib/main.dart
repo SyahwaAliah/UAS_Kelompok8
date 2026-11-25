@@ -1,16 +1,8 @@
 import 'package:flutter/material.dart';
-import 'notification_service.dart';
-import 'dashboard_page.dart';
+import 'package:google_fonts/google_fonts.dart';
+import 'package:test/service/notification_service.dart';
+import 'package:test/pages/dashboard_page.dart';
 
-/*
-Kalau mau run code jalankan di emulator Android, pastikan sudah install SQLite lokal untuk data mahasiswa.
-
-dan jalankan ini, 
-
-cd /d "D:\Semester 5\Moprog\UAS" (lokasi folder project)
-flutter emulators --launch Medium_Phone
-flutter run -d emulator-5554
-*/
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
@@ -25,14 +17,18 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final poppins = GoogleFonts.poppins().fontFamily;
+    final kroneOne = GoogleFonts.kronaOne().fontFamily;
+
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       title: 'Bimbingan Skripsi',
       theme: ThemeData(
         useMaterial3: true,
+        fontFamily: poppins,
         pageTransitionsTheme: const PageTransitionsTheme(
           builders: {
-            TargetPlatform.android: FadeUpwardsPageTransitionsBuilder()
+            TargetPlatform.android: FadeUpwardsPageTransitionsBuilder(),
           },
         ),
         scaffoldBackgroundColor: const Color(0xFFFFF0DE),
@@ -42,11 +38,16 @@ class MyApp extends StatelessWidget {
           secondary: const Color(0xFF96C1C5),
           surface: const Color(0xFFFFF0DE),
         ),
-        appBarTheme: const AppBarTheme(
+        appBarTheme: AppBarTheme(
           backgroundColor: Colors.transparent,
           foregroundColor: const Color(0xFF694A47),
           elevation: 0,
           surfaceTintColor: Colors.transparent,
+          titleTextStyle: TextStyle(
+            fontFamily: kroneOne,
+            color: const Color(0xFF523B39),
+            fontSize: 18,
+          ),
         ),
       ),
       home: const DashboardPage(),

@@ -16,10 +16,10 @@ class DetailRevisiPage {
   ];
 
   static void buka(
-      BuildContext context, {
-        required List<bool> statusAwal,
-        required ValueChanged<List<bool>> onProgressChanged,
-      }) {
+    BuildContext context, {
+    required List<bool> statusAwal,
+    required ValueChanged<List<bool>> onProgressChanged,
+  }) {
     // Salin status agar checklist dialog bisa diperbarui.
     List<bool> status = List<bool>.from(statusAwal);
 
@@ -65,7 +65,10 @@ class DetailRevisiPage {
                       ),
                       child: const Row(
                         children: [
-                          Icon(Icons.assignment_late_rounded, color: Colors.amber),
+                          Icon(
+                            Icons.assignment_late_rounded,
+                            color: Colors.amber,
+                          ),
                           SizedBox(width: 12),
                           Expanded(
                             child: Column(
@@ -153,9 +156,13 @@ class DetailRevisiPage {
                             style: TextStyle(fontWeight: FontWeight.bold),
                           ),
                           SizedBox(height: 8),
-                          Text('• Perbarui landasan teori dengan jurnal di atas tahun 2020.'),
+                          Text(
+                            '• Perbarui landasan teori dengan jurnal di atas tahun 2020.',
+                          ),
                           SizedBox(height: 4),
-                          Text('• Perbaiki metode pengambilan sampel pada Bab 3.'),
+                          Text(
+                            '• Perbaiki metode pengambilan sampel pada Bab 3.',
+                          ),
                           SizedBox(height: 4),
                           Text('• Rapikan format penulisan daftar pustaka.'),
                         ],
@@ -183,7 +190,10 @@ class DetailRevisiPage {
                                 SizedBox(height: 5),
                                 Text(
                                   'Senin, 12 Oktober 2026 (Sebelum Jam 12.00 WIB)',
-                                  style: TextStyle(color: Colors.grey, fontSize: 13),
+                                  style: TextStyle(
+                                    color: Colors.grey,
+                                    fontSize: 13,
+                                  ),
                                 ),
                               ],
                             ),
@@ -214,12 +224,13 @@ class DetailRevisiPage {
       },
       transitionBuilder: (context, animation, secondaryAnimation, child) {
         final fade = CurvedAnimation(parent: animation, curve: Curves.easeOut);
-        final slide = Tween<Offset>(
-          begin: const Offset(0, 0.15),
-          end: Offset.zero,
-        ).animate(
-          CurvedAnimation(parent: animation, curve: Curves.easeOutCubic),
-        );
+        final slide =
+            Tween<Offset>(
+              begin: const Offset(0, 0.15),
+              end: Offset.zero,
+            ).animate(
+              CurvedAnimation(parent: animation, curve: Curves.easeOutCubic),
+            );
 
         return FadeTransition(
           opacity: fade,

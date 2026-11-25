@@ -1,4 +1,3 @@
-/// Representasi satu baris tabel mahasiswa.
 class MahasiswaModel {
   final int? id;
   final String nama;

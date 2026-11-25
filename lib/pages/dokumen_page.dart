@@ -1,7 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'file_service.dart';
-import 'jadwal_theme.dart';
+import 'package:test/service/file_service.dart';
+import 'package:test/theme/jadwal_theme.dart';
 
 class DokumenPage extends StatefulWidget {
   const DokumenPage({super.key});
@@ -87,10 +87,7 @@ class _DokumenPageState extends State<DokumenPage> {
             ),
             TextButton(
               onPressed: () => Navigator.pop(context, true),
-              child: const Text(
-                'Hapus',
-                style: TextStyle(color: primary),
-              ),
+              child: const Text('Hapus', style: TextStyle(color: primary)),
             ),
           ],
         );
@@ -112,9 +109,8 @@ class _DokumenPageState extends State<DokumenPage> {
   void _showMessage(String message) {
     if (!mounted) return;
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message)),
-    );
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text(message)));
   }
 
   // ---------------------------------------------------------------
@@ -123,88 +119,81 @@ class _DokumenPageState extends State<DokumenPage> {
 
   @override
   Widget build(BuildContext context) {
-    return AnimatedPage(child: Scaffold(
-      body: Container(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            colors: [
-              Color(0xFFFFF0DE),
-              Color(0xFFE5F0EF),
-            ],
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
+    return AnimatedPage(
+      child: Scaffold(
+        body: Container(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              colors: [Color(0xFFFFF0DE), Color(0xFFE5F0EF)],
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+            ),
           ),
-        ),
-        child: SafeArea(
-          child: Column(
-            children: [
-              Padding(
-                padding: const EdgeInsets.all(15),
-                child: Row(
-                  children: [
-                    Container(
-                      width: 42,
-                      height: 42,
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        shape: BoxShape.circle,
-                        boxShadow: [
-                          BoxShadow(
-                            color:
-                            Colors.black.withOpacity(0.05),
-                            blurRadius: 8,
-                            offset: const Offset(0, 3),
+          child: SafeArea(
+            child: Column(
+              children: [
+                Padding(
+                  padding: const EdgeInsets.all(15),
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 42,
+                        height: 42,
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          shape: BoxShape.circle,
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.05),
+                              blurRadius: 8,
+                              offset: const Offset(0, 3),
+                            ),
+                          ],
+                        ),
+                        child: IconButton(
+                          onPressed: () {
+                            Navigator.pop(context);
+                          },
+                          icon: const Icon(
+                            Icons.arrow_back_ios_new,
+                            size: 18,
+                            color: primary,
                           ),
-                        ],
-                      ),
-                      child: IconButton(
-                        onPressed: () {
-                          Navigator.pop(context);
-                        },
-                        icon: const Icon(
-                          Icons.arrow_back_ios_new,
-                          size: 18,
-                          color: primary,
                         ),
                       ),
-                    ),
 
-                    const SizedBox(width: 12),
+                      const SizedBox(width: 12),
 
-                    const Text(
-                      'Dokumen Skripsi',
-                      style: TextStyle(
-                        fontSize: 22,
-                        fontWeight: FontWeight.bold,
-                        color: darkPrimary,
+                      const Text(
+                        'Dokumen Skripsi',
+                        style: TextStyle(
+                          fontSize: 22,
+                          fontWeight: FontWeight.bold,
+                          color: darkPrimary,
+                        ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
-              ),
 
-              Expanded(child: _buildBody()),
-            ],
+                Expanded(child: _buildBody()),
+              ],
+            ),
           ),
         ),
-      ),
 
-      floatingActionButton: FloatingActionButton(
-        backgroundColor: primary,
-        onPressed: _uploadDocument,
-        child: const Icon(
-          Icons.add,
-          color: Colors.white,
+        floatingActionButton: FloatingActionButton(
+          backgroundColor: primary,
+          onPressed: _uploadDocument,
+          child: const Icon(Icons.add, color: Colors.white),
         ),
       ),
-    ));
+    );
   }
 
   Widget _buildBody() {
     if (_isLoading) {
-      return const Center(
-        child: CircularProgressIndicator(color: primary),
-      );
+      return const Center(child: CircularProgressIndicator(color: primary));
     }
 
     if (_documents.isEmpty) {
@@ -214,11 +203,7 @@ class _DokumenPageState extends State<DokumenPage> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(
-                Icons.folder_open_rounded,
-                size: 64,
-                color: orange,
-              ),
+              Icon(Icons.folder_open_rounded, size: 64, color: orange),
               SizedBox(height: 12),
               Text(
                 'Belum ada dokumen',
@@ -232,10 +217,7 @@ class _DokumenPageState extends State<DokumenPage> {
               Text(
                 'Tekan tombol + untuk mengunggah dokumen.',
                 textAlign: TextAlign.center,
-                style: TextStyle(
-                  color: Colors.grey,
-                  fontSize: 12,
-                ),
+                style: TextStyle(color: Colors.grey, fontSize: 12),
               ),
             ],
           ),
@@ -296,16 +278,13 @@ class _DokumenPageState extends State<DokumenPage> {
 
                 Expanded(
                   child: Column(
-                    crossAxisAlignment:
-                    CrossAxisAlignment.start,
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
                         doc.title,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          fontWeight: FontWeight.bold,
-                        ),
+                        style: const TextStyle(fontWeight: FontWeight.bold),
                       ),
                       const SizedBox(height: 4),
                       Text(
@@ -319,10 +298,7 @@ class _DokumenPageState extends State<DokumenPage> {
                   ),
                 ),
 
-                const Icon(
-                  Icons.open_in_new_rounded,
-                  color: orange,
-                ),
+                const Icon(Icons.open_in_new_rounded, color: orange),
               ],
             ),
           ),

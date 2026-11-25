@@ -1,4 +1,3 @@
-/// Representasi satu baris tabel dokumen.
 class DokumenModel {
   final int? id;
   final int? mahasiswaId;

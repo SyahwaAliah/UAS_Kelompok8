@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'jadwal_theme.dart';
+import 'package:test/theme/jadwal_theme.dart';
 
 class AnimatedButton extends StatefulWidget {
   final String text;
@@ -54,7 +54,10 @@ class _AnimatedButtonState extends State<AnimatedButton> {
             ],
             Text(
               widget.text,
-              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+              style: const TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.bold,
+              ),
             ),
           ],
         ),

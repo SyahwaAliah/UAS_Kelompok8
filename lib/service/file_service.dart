@@ -22,8 +22,7 @@ class StoredDocument {
   });
 
   /// Ekstensi file huruf besar, contoh: PDF
-  String get extension =>
-      p.extension(path).replaceFirst('.', '').toUpperCase();
+  String get extension => p.extension(path).replaceFirst('.', '').toUpperCase();
 
   /// Nama tanpa ekstensi, cocok untuk title card
   String get title => p.basenameWithoutExtension(path);
@@ -64,11 +63,7 @@ class FileService {
 
   static const String _folderName = 'dokumen_skripsi';
 
-  static const List<String> allowedExtensions = [
-    'pdf',
-    'doc',
-    'docx',
-  ];
+  static const List<String> allowedExtensions = ['pdf', 'doc', 'docx'];
 
   // ---------------------------------------------------------------
   // FOLDER
@@ -172,9 +167,7 @@ class FileService {
 
       return documents;
     } catch (_) {
-      throw const FileServiceException(
-        'Gagal mengambil daftar dokumen.',
-      );
+      throw const FileServiceException('Gagal mengambil daftar dokumen.');
     }
   }
 
@@ -185,9 +178,7 @@ class FileService {
   /// Membuka dokumen dengan aplikasi bawaan perangkat.
   Future<void> openDocument(String path) async {
     if (!await File(path).exists()) {
-      throw const FileServiceException(
-        'File tidak ditemukan di perangkat.',
-      );
+      throw const FileServiceException('File tidak ditemukan di perangkat.');
     }
 
     final result = await OpenFilex.open(path);
@@ -200,13 +191,9 @@ class FileService {
           'Tidak ada aplikasi untuk membuka dokumen ini.',
         );
       case ResultType.fileNotFound:
-        throw const FileServiceException(
-          'File tidak ditemukan di perangkat.',
-        );
+        throw const FileServiceException('File tidak ditemukan di perangkat.');
       default:
-        throw const FileServiceException(
-          'Dokumen tidak dapat dibuka.',
-        );
+        throw const FileServiceException('Dokumen tidak dapat dibuka.');
     }
   }
 
@@ -218,9 +205,7 @@ class FileService {
         await file.delete();
       }
     } catch (_) {
-      throw const FileServiceException(
-        'Gagal menghapus dokumen.',
-      );
+      throw const FileServiceException('Gagal menghapus dokumen.');
     }
   }
 

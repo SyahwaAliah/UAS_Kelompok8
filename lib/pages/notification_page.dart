@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
-
-import 'jadwal_theme.dart';
-import 'notification_service.dart';
+import 'package:test/theme/jadwal_theme.dart';
+import 'package:test/service/notification_service.dart';
 
 class NotificationPage extends StatelessWidget {
   const NotificationPage({super.key});
@@ -32,10 +31,7 @@ class NotificationPage extends StatelessWidget {
         body: Container(
           decoration: const BoxDecoration(
             gradient: LinearGradient(
-              colors: [
-                Color(0xFFFFF0DE),
-                Color(0xFFEAF3F2),
-              ],
+              colors: [Color(0xFFFFF0DE), Color(0xFFEAF3F2)],
               begin: Alignment.topCenter,
               end: Alignment.bottomCenter,
             ),
@@ -120,8 +116,7 @@ class NotificationPage extends StatelessWidget {
                 ),
 
                 Expanded(
-                  child: ValueListenableBuilder<
-                      List<AppNotification>>(
+                  child: ValueListenableBuilder<List<AppNotification>>(
                     valueListenable: service.notifications,
                     builder: (context, items, _) {
                       if (items.isEmpty) {
@@ -161,8 +156,7 @@ class NotificationPage extends StatelessWidget {
                       }
 
                       return ListView.builder(
-                        padding: const EdgeInsets.fromLTRB(
-                            18, 10, 18, 25),
+                        padding: const EdgeInsets.fromLTRB(18, 10, 18, 25),
                         itemCount: items.length,
                         itemBuilder: (context, index) {
                           final item = items[index];
@@ -180,9 +174,7 @@ class NotificationPage extends StatelessWidget {
                               borderRadius: BorderRadius.circular(20),
                               border: item.isRead
                                   ? null
-                                  : Border.all(
-                                color: accent.withOpacity(0.65),
-                              ),
+                                  : Border.all(color: accent.withOpacity(0.65)),
                               boxShadow: [
                                 BoxShadow(
                                   color: Colors.black.withOpacity(0.04),
@@ -199,16 +191,14 @@ class NotificationPage extends StatelessWidget {
                               child: Padding(
                                 padding: const EdgeInsets.all(16),
                                 child: Row(
-                                  crossAxisAlignment:
-                                  CrossAxisAlignment.start,
+                                  crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                     Container(
                                       width: 48,
                                       height: 48,
                                       decoration: BoxDecoration(
                                         color: background,
-                                        borderRadius:
-                                        BorderRadius.circular(15),
+                                        borderRadius: BorderRadius.circular(15),
                                       ),
                                       child: Icon(
                                         icon,
@@ -220,7 +210,7 @@ class NotificationPage extends StatelessWidget {
                                     Expanded(
                                       child: Column(
                                         crossAxisAlignment:
-                                        CrossAxisAlignment.start,
+                                            CrossAxisAlignment.start,
                                         children: [
                                           Row(
                                             children: [
@@ -230,15 +220,15 @@ class NotificationPage extends StatelessWidget {
                                                   style: const TextStyle(
                                                     color: darkOlive,
                                                     fontSize: 14,
-                                                    fontWeight:
-                                                    FontWeight.bold,
+                                                    fontWeight: FontWeight.bold,
                                                   ),
                                                 ),
                                               ),
                                               if (!item.isRead)
                                                 const Padding(
                                                   padding: EdgeInsets.only(
-                                                      left: 6),
+                                                    left: 6,
+                                                  ),
                                                   child: CircleAvatar(
                                                     radius: 4,
                                                     backgroundColor: accent,

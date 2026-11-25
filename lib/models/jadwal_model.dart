@@ -1,4 +1,3 @@
-/// Representasi satu baris tabel jadwal_bimbingan.
 class JadwalModel {
   final int? id;
   final String tanggal;

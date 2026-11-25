@@ -2,15 +2,9 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:timezone/data/latest_all.dart' as tz_data;
 import 'package:timezone/timezone.dart' as tz;
+import 'package:test/database/database_helper.dart';
 
-import 'database/database_helper.dart';
-
-enum NotificationType {
-  jadwal,
-  revisi,
-  pesan,
-  selesai,
-}
+enum NotificationType { jadwal, revisi, pesan, selesai }
 
 class AppNotification {
   final int id;
@@ -33,7 +27,7 @@ class AppNotification {
     return AppNotification(
       id: map['id'] as int,
       type: NotificationType.values.firstWhere(
-            (value) => value.name == map['type'],
+        (value) => value.name == map['type'],
         orElse: () => NotificationType.pesan,
       ),
       title: map['title'] as String,
@@ -80,20 +74,19 @@ class NotificationService {
       'Notifikasi informasi dan pengingat bimbingan skripsi';
 
   final FlutterLocalNotificationsPlugin _plugin =
-  FlutterLocalNotificationsPlugin();
+      FlutterLocalNotificationsPlugin();
 
   final ValueNotifier<List<AppNotification>> notifications =
-  ValueNotifier<List<AppNotification>>([]);
+      ValueNotifier<List<AppNotification>>([]);
 
   bool _initialized = false;
 
   bool get _supported =>
       !kIsWeb &&
-          (defaultTargetPlatform == TargetPlatform.android ||
-              defaultTargetPlatform == TargetPlatform.iOS);
+      (defaultTargetPlatform == TargetPlatform.android ||
+          defaultTargetPlatform == TargetPlatform.iOS);
 
-  static const NotificationDetails _notificationDetails =
-  NotificationDetails(
+  static const NotificationDetails _notificationDetails = NotificationDetails(
     android: AndroidNotificationDetails(
       channelId,
       channelName,
@@ -136,21 +129,25 @@ class NotificationService {
     if (!_initialized) return false;
 
     try {
-      final android = _plugin.resolvePlatformSpecificImplementation<
-          AndroidFlutterLocalNotificationsPlugin>();
+      final android = _plugin
+          .resolvePlatformSpecificImplementation<
+            AndroidFlutterLocalNotificationsPlugin
+          >();
 
       if (android != null) {
         return await android.requestNotificationsPermission() ?? false;
       }
 
-      final ios = _plugin.resolvePlatformSpecificImplementation<
-          IOSFlutterLocalNotificationsPlugin>();
+      final ios = _plugin
+          .resolvePlatformSpecificImplementation<
+            IOSFlutterLocalNotificationsPlugin
+          >();
 
       return await ios?.requestPermissions(
-        alert: true,
-        badge: true,
-        sound: true,
-      ) ??
+            alert: true,
+            badge: true,
+            sound: true,
+          ) ??
           false;
     } catch (error) {
       debugPrint('Notification permission error: $error');
@@ -193,8 +190,7 @@ class NotificationService {
     } catch (error) {
       debugPrint('Failed to save notification history: $error');
 
-      notificationId =
-          DateTime.now().millisecondsSinceEpoch % 2000000000;
+      notificationId = DateTime.now().millisecondsSinceEpoch % 2000000000;
     }
 
     if (!_initialized || !_supported) return;
@@ -281,8 +277,7 @@ class NotificationService {
   // Retrieve notification history from SQLite.
   Future<void> _reloadHistory() async {
     try {
-      final rows =
-      await DatabaseHelper.instance.ambilNotifikasi();
+      final rows = await DatabaseHelper.instance.ambilNotifikasi();
 
       notifications.value = rows
           .map((row) => AppNotification.fromMap(row))

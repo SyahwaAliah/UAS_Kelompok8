@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 
 class JadwalColors {
-
   static const Color olive = Color(0xFF694A47);
   static const Color darkOlive = Color(0xFF523B39);
 
@@ -26,10 +25,7 @@ class JadwalColors {
 class JadwalBackground extends StatelessWidget {
   final Widget child;
 
-  const JadwalBackground({
-    super.key,
-    required this.child,
-  });
+  const JadwalBackground({super.key, required this.child});
 
   @override
   Widget build(BuildContext context) {
@@ -38,17 +34,12 @@ class JadwalBackground extends StatelessWidget {
       height: double.infinity,
       decoration: const BoxDecoration(
         gradient: LinearGradient(
-          colors: [
-            JadwalColors.cream,
-            JadwalColors.softGreen,
-          ],
+          colors: [JadwalColors.cream, JadwalColors.softGreen],
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
         ),
       ),
-      child: SafeArea(
-        child: child,
-      ),
+      child: SafeArea(child: child),
     );
   }
 }
@@ -57,11 +48,7 @@ class JadwalHeader extends StatelessWidget {
   final String title;
   final String subtitle;
 
-  const JadwalHeader({
-    super.key,
-    required this.title,
-    required this.subtitle,
-  });
+  const JadwalHeader({super.key, required this.title, required this.subtitle});
 
   @override
   Widget build(BuildContext context) {
@@ -129,10 +116,7 @@ class JadwalHeader extends StatelessWidget {
 class AnimatedPage extends StatefulWidget {
   final Widget child;
 
-  const AnimatedPage({
-    super.key,
-    required this.child,
-  });
+  const AnimatedPage({super.key, required this.child});
 
   @override
   State<AnimatedPage> createState() => _AnimatedPageState();
@@ -154,24 +138,17 @@ class _AnimatedPageState extends State<AnimatedPage>
       duration: const Duration(milliseconds: 550),
     );
 
-    fadeAnimation = CurvedAnimation(
-      parent: controller,
-      curve: Curves.easeOut,
-    );
+    fadeAnimation = CurvedAnimation(parent: controller, curve: Curves.easeOut);
 
     slideAnimation = Tween<Offset>(
       begin: const Offset(0, 0.025),
       end: Offset.zero,
-    ).animate(
-      CurvedAnimation(
-        parent: controller,
-        curve: Curves.easeOutCubic,
-      ),
-    );
+    ).animate(CurvedAnimation(parent: controller, curve: Curves.easeOutCubic));
 
-    scaleAnimation = Tween<double>(begin: 0.985, end: 1.0).animate(
-      CurvedAnimation(parent: controller, curve: Curves.easeOutCubic),
-    );
+    scaleAnimation = Tween<double>(
+      begin: 0.985,
+      end: 1.0,
+    ).animate(CurvedAnimation(parent: controller, curve: Curves.easeOutCubic));
 
     controller.forward();
   }
@@ -188,10 +165,7 @@ class _AnimatedPageState extends State<AnimatedPage>
       opacity: fadeAnimation,
       child: SlideTransition(
         position: slideAnimation,
-        child: ScaleTransition(
-          scale: scaleAnimation,
-          child: widget.child,
-        ),
+        child: ScaleTransition(scale: scaleAnimation, child: widget.child),
       ),
     );
   }

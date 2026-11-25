@@ -1,4 +1,3 @@
-/// Representasi satu baris tabel revisi.
 class RevisiModel {
   final int? id;
   final String judul;

@@ -3,7 +3,8 @@ import '../models/revisi_model.dart';
 
 class RevisiRepository {
   final DatabaseHelper _helper;
-  RevisiRepository([DatabaseHelper? helper]) : _helper = helper ?? DatabaseHelper.instance;
+  RevisiRepository([DatabaseHelper? helper])
+    : _helper = helper ?? DatabaseHelper.instance;
 
   Future<int> tambah(RevisiModel item) async {
     final db = await _helper.database;
@@ -18,16 +19,24 @@ class RevisiRepository {
 
   Future<RevisiModel?> berdasarkanId(int id) async {
     final db = await _helper.database;
-    final rows = await db.query('revisi',
-        where: 'id = ?', whereArgs: [id], limit: 1);
+    final rows = await db.query(
+      'revisi',
+      where: 'id = ?',
+      whereArgs: [id],
+      limit: 1,
+    );
     return rows.isEmpty ? null : RevisiModel.fromMap(rows.first);
   }
 
   Future<int> ubah(RevisiModel item) async {
     if (item.id == null) throw ArgumentError('ID diperlukan untuk update');
     final db = await _helper.database;
-    return db.update('revisi', item.toMap(),
-        where: 'id = ?', whereArgs: [item.id]);
+    return db.update(
+      'revisi',
+      item.toMap(),
+      where: 'id = ?',
+      whereArgs: [item.id],
+    );
   }
 
   Future<int> hapus(int id) async {

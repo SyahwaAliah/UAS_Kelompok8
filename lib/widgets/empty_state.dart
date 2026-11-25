@@ -44,11 +44,7 @@ class EmptyState extends StatelessWidget {
                   ),
                 ],
               ),
-              child: Icon(
-                icon,
-                size: 44,
-                color: orange,
-              ),
+              child: Icon(icon, size: 44, color: orange),
             ),
 
             const SizedBox(height: 20),
@@ -68,10 +64,7 @@ class EmptyState extends StatelessWidget {
             Text(
               message,
               textAlign: TextAlign.center,
-              style: const TextStyle(
-                color: Colors.grey,
-                fontSize: 13,
-              ),
+              style: const TextStyle(color: Colors.grey, fontSize: 13),
             ),
 
             if (actionLabel != null && onAction != null) ...[
@@ -93,9 +86,7 @@ class EmptyState extends StatelessWidget {
                 ),
                 child: Text(
                   actionLabel!,
-                  style: const TextStyle(
-                    fontWeight: FontWeight.w600,
-                  ),
+                  style: const TextStyle(fontWeight: FontWeight.w600),
                 ),
               ),
             ],
