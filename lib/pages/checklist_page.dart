@@ -1,9 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:test/widgets/empty_state.dart';
 import 'package:test/theme/jadwal_theme.dart';
 import 'package:test/models/checklist_model.dart';
-import 'package:test/repositories/checklist_repository.dart';
-import 'package:test/database/database_helper.dart';
+import 'package:test/database/progress_akun_service.dart';
 
 class ChecklistPage extends StatefulWidget {
   const ChecklistPage({super.key});
@@ -16,177 +14,166 @@ class _ChecklistPageState extends State<ChecklistPage> {
   static const primary = Color(0xFF694A47);
   static const darkPrimary = Color(0xFF523B39);
 
-  final ChecklistRepository _repo = ChecklistRepository();
-  List<ChecklistModel> _items = [];
-  bool _isLoading = true;
+  final service = ProgressAkunService.instance;
+
+  List<ChecklistModel> items = [];
+  bool loading = true;
 
   @override
   void initState() {
     super.initState();
-    _loadItems();
+    muat();
   }
 
-  Future<void> _loadItems() async {
-    setState(() => _isLoading = true);
-
+  Future<void> muat() async {
     try {
-      await DatabaseHelper.instance.siapkanChecklistAwal();
-      final rows = await _repo.semua();
-
+      final rows = await service.semua();
       if (!mounted) return;
 
       setState(() {
-        _items = rows;
-        _isLoading = false;
+        items = rows;
+        loading = false;
       });
     } catch (e) {
       if (!mounted) return;
-
-      setState(() => _isLoading = false);
-      _showMessage('Gagal memuat checklist: $e');
+      setState(() => loading = false);
+      pesan('$e');
     }
   }
 
-  void _showMessage(String pesan) {
+  void pesan(String isi) {
     if (!mounted) return;
 
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(pesan)));
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(isi)),
+    );
   }
 
-  Future<void> _toggleItem(ChecklistModel item) async {
+  Future<void> toggle(ChecklistModel item) async {
     try {
-      await _repo.ubah(
-        ChecklistModel(
-          id: item.id,
-          kegiatan: item.kegiatan,
-          selesai: !item.selesai,
-        ),
+      await service.ubahStatus(
+        item.id!,
+        !item.selesai,
       );
-
-      await _loadItems();
+      await muat();
     } catch (e) {
-      _showMessage('Gagal mengubah status: $e');
+      pesan('Gagal memperbarui: $e');
     }
   }
 
-  Future<void> _addItem() async {
-    String title = '';
+  Future<void> tambah() async {
+    final controller = TextEditingController();
 
-    final result = await showDialog<String>(
+    final simpan = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Tambah Tahap'),
+        title: const Text('Tambah Tahap Skripsi'),
         content: TextField(
-          autofocus: true,
-          textCapitalization: TextCapitalization.sentences,
+          controller: controller,
           decoration: const InputDecoration(
-            hintText: 'Nama tahap, contoh: Bab 4',
+            hintText: 'Contoh: Bab 4',
           ),
-          onChanged: (value) => title = value,
-          onSubmitted: (value) {
-            Navigator.pop(ctx, value.trim());
-          },
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(ctx),
+            onPressed: () => Navigator.pop(ctx, false),
             child: const Text('Batal'),
           ),
-          TextButton(
-            onPressed: () {
-              Navigator.pop(ctx, title.trim());
-            },
-            child: const Text('Tambah', style: TextStyle(color: primary)),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Tambah'),
           ),
         ],
       ),
     );
 
-    if (result == null || result.isEmpty) return;
+    final judul = controller.text.trim();
+    controller.dispose();
+
+    if (simpan != true) return;
 
     try {
-      await _repo.tambah(ChecklistModel(kegiatan: result));
-
-      await _loadItems();
+      await service.tambah(judul);
+      await muat();
     } catch (e) {
-      _showMessage('Gagal menambah tahap: $e');
+      pesan('Gagal menambah: $e');
     }
   }
 
-  Future<void> _confirmDelete(ChecklistModel item) async {
-    final confirm = await showDialog<bool>(
+  Future<void> hapus(ChecklistModel item) async {
+    final setuju = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Hapus tahap?'),
+        title: const Text('Hapus Tahap?'),
         content: Text(item.kegiatan),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
             child: const Text('Batal'),
           ),
-          TextButton(
+          FilledButton(
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Hapus', style: TextStyle(color: primary)),
+            child: const Text('Hapus'),
           ),
         ],
       ),
     );
 
-    if (confirm != true || item.id == null) return;
+    if (setuju != true) return;
 
     try {
-      await _repo.hapus(item.id!);
-      await _loadItems();
+      await service.hapus(item.id!);
+      await muat();
     } catch (e) {
-      _showMessage('Gagal menghapus tahap: $e');
+      pesan('Gagal menghapus: $e');
     }
   }
 
-  Widget itemChecklist(ChecklistModel item) {
-    final selesai = item.selesai;
-
-    return GestureDetector(
-      onTap: () => _toggleItem(item),
-      onLongPress: () => _confirmDelete(item),
+  Widget kartu(ChecklistModel item) {
+    return InkWell(
+      onTap: () => toggle(item),
+      onLongPress: () => hapus(item),
+      borderRadius: BorderRadius.circular(18),
       child: Container(
         margin: const EdgeInsets.only(bottom: 10),
-        padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 13),
+        padding: const EdgeInsets.symmetric(
+          horizontal: 16,
+          vertical: 15,
+        ),
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(18),
         ),
         child: Row(
           children: [
-            Container(
-              width: 25,
-              height: 25,
-              decoration: BoxDecoration(
-                color: selesai ? primary : Colors.white,
-                borderRadius: BorderRadius.circular(7),
-                border: Border.all(
-                  color: selesai ? primary : Colors.grey,
-                  width: 2,
-                ),
-              ),
-              child: selesai
-                  ? const Icon(Icons.check, size: 17, color: Colors.white)
-                  : null,
+            Icon(
+              item.selesai
+                  ? Icons.check_box_rounded
+                  : Icons.check_box_outline_blank_rounded,
+              color: item.selesai
+                  ? primary
+                  : Colors.grey,
             ),
             const SizedBox(width: 14),
             Expanded(
               child: Text(
                 item.kegiatan,
                 style: TextStyle(
+                  color: darkPrimary,
                   fontWeight: FontWeight.w600,
-                  decoration: selesai ? TextDecoration.lineThrough : null,
-                  color: selesai ? Colors.grey : darkPrimary,
+                  decoration: item.selesai
+                      ? TextDecoration.lineThrough
+                      : null,
                 ),
               ),
             ),
-            Icon(
-              selesai ? Icons.check_circle : Icons.circle_outlined,
-              color: selesai ? primary : Colors.grey.shade400,
-              size: 20,
+            IconButton(
+              tooltip: 'Hapus tahap',
+              onPressed: () => hapus(item),
+              icon: const Icon(
+                Icons.delete_outline,
+                color: primary,
+              ),
             ),
           ],
         ),
@@ -194,106 +181,97 @@ class _ChecklistPageState extends State<ChecklistPage> {
     );
   }
 
-  Widget _buildBody() {
-    if (_isLoading) {
-      return const Center(child: CircularProgressIndicator(color: primary));
-    }
-
-    if (_items.isEmpty) {
-      return EmptyState(
-        icon: Icons.checklist_rounded,
-        title: 'Checklist masih kosong',
-        message: 'Tambahkan tahap skripsi untuk mulai memantau progres kamu.',
-        actionLabel: 'Tambah Tahap',
-        onAction: _addItem,
-      );
-    }
-
-    final selesaiCount = _items.where((item) => item.selesai).length;
-
-    return SingleChildScrollView(
-      padding: const EdgeInsets.fromLTRB(15, 15, 15, 90),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Padding(
-            padding: const EdgeInsets.only(left: 4, bottom: 12),
-            child: Text(
-              '$selesaiCount dari ${_items.length} tahap selesai',
-              style: const TextStyle(color: Colors.grey, fontSize: 12),
-            ),
-          ),
-          ..._items.map(itemChecklist),
-        ],
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
+    final jumlahSelesai =
+        items.where((item) => item.selesai).length;
+
+    final persen = items.isEmpty
+        ? 0
+        : (jumlahSelesai / items.length * 100).round();
+
     return AnimatedPage(
       child: Scaffold(
-        body: Container(
-          decoration: const BoxDecoration(
-            gradient: LinearGradient(
-              colors: [Color(0xFFFFF0DE), Color(0xFFE5F0EF)],
-              begin: Alignment.topCenter,
-              end: Alignment.bottomCenter,
+        backgroundColor: const Color(0xFFFFF0DE),
+        appBar: AppBar(
+          title: const Text('Progress Skripsi'),
+          actions: [
+            IconButton(
+              onPressed: muat,
+              icon: const Icon(Icons.refresh),
             ),
-          ),
-          child: SafeArea(
-            child: Column(
-              children: [
-                Padding(
-                  padding: const EdgeInsets.all(15),
-                  child: Row(
-                    children: [
-                      Container(
-                        width: 42,
-                        height: 42,
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          shape: BoxShape.circle,
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withOpacity(0.05),
-                              blurRadius: 8,
-                              offset: const Offset(0, 3),
-                            ),
-                          ],
-                        ),
-                        child: IconButton(
-                          onPressed: () => Navigator.pop(context),
-                          icon: const Icon(
-                            Icons.arrow_back_ios_new,
-                            size: 17,
-                            color: primary,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      const Text(
-                        'Progress Skripsi',
-                        style: TextStyle(
-                          fontSize: 22,
-                          fontWeight: FontWeight.bold,
-                          color: darkPrimary,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                Expanded(child: _buildBody()),
-              ],
-            ),
-          ),
+          ],
         ),
-        floatingActionButton: _isLoading
-            ? null
-            : FloatingActionButton(
-                backgroundColor: primary,
-                onPressed: _addItem,
-                child: const Icon(Icons.add, color: Colors.white),
+        floatingActionButton: FloatingActionButton(
+          backgroundColor: primary,
+          foregroundColor: Colors.white,
+          onPressed: tambah,
+          child: const Icon(Icons.add),
+        ),
+        body: loading
+            ? const Center(
+                child: CircularProgressIndicator(
+                  color: primary,
+                ),
+              )
+            : RefreshIndicator(
+                onRefresh: muat,
+                child: ListView(
+                  padding: const EdgeInsets.fromLTRB(
+                    18, 18, 18, 95,
+                  ),
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(20),
+                      decoration: BoxDecoration(
+                        color: primary,
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Column(
+                        crossAxisAlignment:
+                            CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'Progress Skripsi Kamu',
+                            style: TextStyle(
+                              color: Colors.white70,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            '$persen%',
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 30,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          LinearProgressIndicator(
+                            value: persen / 100,
+                            backgroundColor: Colors.white30,
+                            color: const Color(0xFF96C1C5),
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            '$jumlahSelesai dari '
+                            '${items.length} tahapan selesai',
+                            style: const TextStyle(
+                              color: Colors.white70,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+                    if (items.isEmpty)
+                      const Text(
+                        'Belum ada tahapan.',
+                        textAlign: TextAlign.center,
+                      ),
+                    ...items.map(kartu),
+                  ],
+                ),
               ),
       ),
     );

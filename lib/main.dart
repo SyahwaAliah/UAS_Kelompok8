@@ -1,7 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:test/service/notification_service.dart';
+
+import 'package:test/database/auth_database.dart';
 import 'package:test/pages/dashboard_page.dart';
+import 'package:test/pages/dashboard_dosen_page.dart';
+import 'package:test/pages/login_page.dart';
+import 'package:test/service/notification_service.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -22,7 +26,7 @@ class MyApp extends StatelessWidget {
 
     return MaterialApp(
       debugShowCheckedModeBanner: false,
-      title: 'Bimbingan Skripsi',
+      title: 'Skriva',
       theme: ThemeData(
         useMaterial3: true,
         fontFamily: poppins,
@@ -50,7 +54,57 @@ class MyApp extends StatelessWidget {
           ),
         ),
       ),
-      home: const DashboardPage(),
+      home: const AuthGate(),
+    );
+  }
+}
+
+class AuthGate extends StatelessWidget {
+  const AuthGate({super.key});
+
+  Future<Map<String, Object?>?> _cekSesi() {
+    return AuthDatabase.instance.sesiAktif();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<Map<String, Object?>?>(
+      future: _cekSesi(),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState != ConnectionState.done) {
+          return const Scaffold(
+            body: Center(
+              child: CircularProgressIndicator(color: Color(0xFF694A47)),
+            ),
+          );
+        }
+
+        if (snapshot.hasError) {
+          return Scaffold(
+            body: Center(
+              child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: Text(
+                  'Gagal membuka database:\n${snapshot.error}',
+                  textAlign: TextAlign.center,
+                ),
+              ),
+            ),
+          );
+        }
+
+        final akun = snapshot.data;
+
+        if (akun == null) {
+          return const LoginPage();
+        }
+
+        if (akun['role'] == 'dosen') {
+          return const DashboardDosenPage();
+        }
+
+        return const DashboardPage();
+      },
     );
   }
 }

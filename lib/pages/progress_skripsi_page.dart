@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:test/theme/jadwal_theme.dart';
-import 'package:test/database/database_helper.dart';
-import 'package:test/repositories/checklist_repository.dart';
+import 'package:test/database/progress_akun_service.dart';
 import 'package:test/models/checklist_model.dart';
 
 import 'checklist_page.dart';
@@ -18,7 +17,7 @@ class _ProgressSkripsiPageState extends State<ProgressSkripsiPage> {
   static const darkOlive = Color(0xFF523B39);
   static const blue = Color(0xFF96C1C5);
 
-  final _repo = ChecklistRepository();
+  final _repo = ProgressAkunService.instance;
 
   List<ChecklistModel> _tahapan = [];
   bool _loading = true;
@@ -31,7 +30,6 @@ class _ProgressSkripsiPageState extends State<ProgressSkripsiPage> {
 
   Future<void> _muatProgress() async {
     try {
-      await DatabaseHelper.instance.siapkanChecklistAwal();
       final hasil = await _repo.semua();
 
       if (!mounted) return;

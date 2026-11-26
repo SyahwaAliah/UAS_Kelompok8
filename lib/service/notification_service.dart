@@ -3,6 +3,8 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:timezone/data/latest_all.dart' as tz_data;
 import 'package:timezone/timezone.dart' as tz;
 import 'package:test/database/database_helper.dart';
+import 'package:sqflite/sqflite.dart';
+import 'package:test/database/auth_database.dart';
 
 enum NotificationType { jadwal, revisi, pesan, selesai }
 
@@ -285,5 +287,128 @@ class NotificationService {
     } catch (error) {
       debugPrint('Failed to load notification history: $error');
     }
+  }
+
+  Future<Database> _databaseAkun() async {
+    await AuthDatabase.instance.sesiAktif();
+
+    final db = await DatabaseHelper.instance.database;
+
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS skriva_notifications (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        penerima_id INTEGER NOT NULL,
+        judul TEXT NOT NULL,
+        pesan TEXT NOT NULL,
+        tipe TEXT NOT NULL,
+        referensi_id INTEGER,
+        dibuat_pada TEXT NOT NULL,
+        sudah_dibaca INTEGER NOT NULL DEFAULT 0,
+        FOREIGN KEY (penerima_id) REFERENCES skriva_akun(id)
+      )
+    ''');
+
+    return db;
+  }
+
+  Future<int> kirimKeAkun({
+    required int penerimaId,
+    required String judul,
+    required String pesan,
+    required String tipe,
+    int? referensiId,
+  }) async {
+    final db = await _databaseAkun();
+
+    return db.insert('skriva_notifications', {
+      'penerima_id': penerimaId,
+      'judul': judul,
+      'pesan': pesan,
+      'tipe': tipe,
+      'referensi_id': referensiId,
+      'dibuat_pada': DateTime.now().toIso8601String(),
+      'sudah_dibaca': 0,
+    });
+  }
+
+  Future<List<Map<String, Object?>>> ambilNotifikasiAkun() async {
+    final akun = await AuthDatabase.instance.sesiAktif();
+
+    if (akun == null) return [];
+
+    final db = await _databaseAkun();
+
+    return db.query(
+      'skriva_notifications',
+      where: 'penerima_id = ?',
+      whereArgs: [akun['id']],
+      orderBy: 'dibuat_pada DESC, id DESC',
+    );
+  }
+
+  Future<int> jumlahNotifikasiBelumDibaca() async {
+    final akun = await AuthDatabase.instance.sesiAktif();
+
+    if (akun == null) return 0;
+
+    final db = await _databaseAkun();
+
+    final result = Sqflite.firstIntValue(
+      await db.rawQuery(
+        '''
+        SELECT COUNT(*)
+        FROM skriva_notifications
+        WHERE penerima_id = ?
+          AND sudah_dibaca = 0
+      ''',
+        [akun['id']],
+      ),
+    );
+
+    return result ?? 0;
+  }
+
+  Future<void> tandaiNotifikasiAkunDibaca(int id) async {
+    final akun = await AuthDatabase.instance.sesiAktif();
+
+    if (akun == null) return;
+
+    final db = await _databaseAkun();
+
+    await db.update(
+      'skriva_notifications',
+      {'sudah_dibaca': 1},
+      where: 'id = ? AND penerima_id = ?',
+      whereArgs: [id, akun['id']],
+    );
+  }
+
+  Future<void> tandaiSemuaNotifikasiAkunDibaca() async {
+    final akun = await AuthDatabase.instance.sesiAktif();
+
+    if (akun == null) return;
+
+    final db = await _databaseAkun();
+
+    await db.update(
+      'skriva_notifications',
+      {'sudah_dibaca': 1},
+      where: 'penerima_id = ?',
+      whereArgs: [akun['id']],
+    );
+  }
+
+  Future<void> hapusSemuaNotifikasiAkun() async {
+    final akun = await AuthDatabase.instance.sesiAktif();
+
+    if (akun == null) return;
+
+    final db = await _databaseAkun();
+
+    await db.delete(
+      'skriva_notifications',
+      where: 'penerima_id = ?',
+      whereArgs: [akun['id']],
+    );
   }
 }

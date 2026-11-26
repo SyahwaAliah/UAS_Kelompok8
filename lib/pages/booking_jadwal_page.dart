@@ -9,10 +9,7 @@ import 'package:test/service/notification_service.dart';
 class BookingJadwalPage extends StatefulWidget {
   final String dosen;
 
-  const BookingJadwalPage({
-    super.key,
-    this.dosen = 'Dr. Budi Santoso',
-  });
+  const BookingJadwalPage({super.key, this.dosen = 'Dr. Budi Santoso'});
 
   @override
   State<BookingJadwalPage> createState() => _BookingJadwalPageState();

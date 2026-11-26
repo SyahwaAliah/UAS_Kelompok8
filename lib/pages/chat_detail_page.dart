@@ -1,14 +1,20 @@
 import 'package:flutter/material.dart';
-import 'package:test/theme/jadwal_theme.dart';
+
+import 'package:test/database/auth_database.dart';
 import 'package:test/database/database_helper.dart';
-import 'profil_dosen_page.dart';
+import 'package:test/service/skriva_chat_service.dart';
+import 'package:test/theme/jadwal_theme.dart';
 
 class ChatDetailPage extends StatefulWidget {
-  final String namaDosen;
+  final int? dosenId;
+  final int? mahasiswaId;
+  final String? namaDosen;
 
   const ChatDetailPage({
     super.key,
-    this.namaDosen = 'Dr. Budi Santoso',
+    this.dosenId,
+    this.mahasiswaId,
+    this.namaDosen,
   });
 
   @override
@@ -17,136 +23,330 @@ class ChatDetailPage extends StatefulWidget {
 }
 
 class _ChatDetailPageState extends State<ChatDetailPage> {
-  String get dosen => widget.namaDosen;
+  static const olive = Color(0xFF694A47);
+  static const darkOlive = Color(0xFF523B39);
+  static const blue = Color(0xFF96C1C5);
+  static const cream = Color(0xFFFFF0DE);
+  static const lightBlue = Color(0xFFE5F0EF);
 
   final TextEditingController messageController =
       TextEditingController();
 
-  List<Map<String, Object?>> _messages = [];
-  bool _loading = true;
+  final ScrollController scrollController =
+      ScrollController();
+
+  final service = SkrivaChatService.instance;
+
+  List<Map<String, Object?>> messages = [];
+  List<String> pesanOtomatis = [];
+
+  int? mahasiswaId;
+  int? dosenId;
+  int? akunId;
+
+  String namaLawanBicara = 'Konsultasi Skripsi';
+  String role = '';
+
+  bool loading = true;
+  bool mengirim = false;
 
   @override
   void initState() {
     super.initState();
-    _muatPesan();
-  }
-
-  Future<void> _muatPesan() async {
-    try {
-      final data = await DatabaseHelper.instance.ambilPesanChat(
-        dosen: dosen,
-      );
-
-      if (!mounted) return;
-
-      setState(() {
-        _messages = data;
-        _loading = false;
-      });
-    } catch (e) {
-      if (!mounted) return;
-
-      setState(() => _loading = false);
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Gagal memuat chat: $e')),
-      );
-    }
-  }
-
-  Future<void> kirimPesan() async {
-    final pesan = messageController.text.trim();
-
-    if (pesan.isEmpty) return;
-
-    try {
-      await DatabaseHelper.instance.simpanPesanChat(
-        dosen: dosen,
-        pengirim: 'mahasiswa',
-        pesan: pesan,
-      );
-
-      // Balasan demo, bukan pesan dari dosen sungguhan.
-      final lower = pesan.toLowerCase();
-      final balasan = lower.contains('jadwal') || lower.contains('bimbingan')
-          ? 'Untuk jadwal bimbingan, silakan cek menu Jadwal dan ajukan waktu yang tersedia.'
-          : lower.contains('bab') || lower.contains('revisi')
-              ? 'Silakan kirim pertanyaan atau bagian bab yang ingin dibahas. Kita review pada sesi bimbingan.'
-              : 'Terima kasih, pesanmu sudah tercatat. Silakan jelaskan kebutuhan konsultasimu lebih lanjut.';
-      await DatabaseHelper.instance.simpanPesanChat(
-        dosen: dosen, pengirim: 'simulasi_dosen', pesan: balasan);
-      messageController.clear();
-      await _muatPesan();
-    } catch (e) {
-      if (!mounted) return;
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Gagal mengirim pesan: $e')),
-      );
-    }
+    muatChat();
   }
 
   @override
   void dispose() {
     messageController.dispose();
+    scrollController.dispose();
     super.dispose();
   }
 
-  Widget pesanKiri(String text, {bool simulasi = false}) {
-    return Align(
-      alignment: Alignment.centerLeft,
-      child: Container(
-        constraints: const BoxConstraints(maxWidth: 285),
-        margin: const EdgeInsets.only(
-          bottom: 10,
-          right: 55,
-        ),
-        padding: const EdgeInsets.all(13),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(18),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.04),
-              blurRadius: 7,
-              offset: const Offset(0, 2),
-            ),
-          ],
-        ),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            if (simulasi) const Padding(
-              padding: EdgeInsets.only(bottom: 5),
-              child: Text('SIMULASI BALASAN DOSEN', style: TextStyle(
-                color: Color(0xFF694A47), fontSize: 10,
-                fontWeight: FontWeight.bold)),
-            ),
-            Text(text, style: const TextStyle(
-              color: Color(0xFF523B39), fontSize: 13)),
-          ],
-        ),
-      ),
+  // ===================================================
+  // AKUN DAN PASANGAN CHAT
+  // ===================================================
+
+  Future<void> muatChat() async {
+    try {
+      final akun = await AuthDatabase.instance.sesiAktif();
+
+      if (akun == null) {
+        throw StateError(
+          'Silakan login terlebih dahulu.',
+        );
+      }
+
+      final idAktif = akun['id'] as int;
+      final roleAktif = akun['role']?.toString() ?? '';
+
+      int? idMahasiswa;
+      int? idDosen;
+      String nama = '';
+
+      final db = await DatabaseHelper.instance.database;
+
+      if (roleAktif == 'mahasiswa') {
+        idMahasiswa = idAktif;
+        idDosen = widget.dosenId;
+
+        if (idDosen == null) {
+          final pembimbing =
+              await AuthDatabase.instance.pembimbing(
+            idMahasiswa,
+          );
+
+          if (pembimbing.isEmpty) {
+            throw StateError(
+              'Belum ada dosen pembimbing.',
+            );
+          }
+
+          idDosen = pembimbing.first['id'] as int;
+          nama = pembimbing.first['nama']?.toString() ?? '';
+        }
+      } else if (roleAktif == 'dosen') {
+        idDosen = idAktif;
+        idMahasiswa = widget.mahasiswaId;
+
+        if (idMahasiswa == null) {
+          throw StateError(
+            'Pilih mahasiswa bimbingan terlebih dahulu.',
+          );
+        }
+      } else {
+        throw StateError(
+          'Role akun tidak didukung untuk chat.',
+        );
+      }
+
+      // Pastikan pasangan dosen-mahasiswa benar.
+      final pasangan = await db.query(
+        'skriva_pembimbing',
+        where: 'mahasiswa_id = ? AND dosen_id = ?',
+        whereArgs: [idMahasiswa, idDosen],
+        limit: 1,
+      );
+
+      if (pasangan.isEmpty) {
+        throw StateError(
+          'Kamu tidak memiliki akses percakapan ini.',
+        );
+      }
+
+      // Nama lawan bicara diambil dari akun asli.
+      final idLawan = roleAktif == 'mahasiswa'
+          ? idDosen
+          : idMahasiswa;
+
+      final akunLawan = await db.query(
+        'skriva_akun',
+        columns: ['nama'],
+        where: 'id = ?',
+        whereArgs: [idLawan],
+        limit: 1,
+      );
+
+      if (akunLawan.isNotEmpty) {
+        nama = akunLawan.first['nama']?.toString() ?? '';
+      }
+
+      if (nama.isEmpty) {
+        nama = widget.namaDosen ?? 'Konsultasi Skripsi';
+      }
+
+      // Ambil pesan asli dari layanan chat dua arah.
+      final daftarPesan = await service.pesan(
+        mahasiswaId: idMahasiswa,
+        dosenId: idDosen,
+      );
+
+      // Ambil pesan sistem berdasarkan jadwal aktual.
+      final sistem = await buatPesanOtomatis(
+        mahasiswa: idMahasiswa,
+        dosen: idDosen,
+      );
+
+      if (!mounted) return;
+
+      setState(() {
+        akunId = idAktif;
+        role = roleAktif;
+        mahasiswaId = idMahasiswa;
+        dosenId = idDosen;
+        namaLawanBicara = nama;
+
+        messages = daftarPesan;
+        pesanOtomatis = sistem;
+        loading = false;
+      });
+
+      scrollKeBawah();
+    } catch (e) {
+      if (!mounted) return;
+
+      setState(() => loading = false);
+      tampilPesan('Gagal memuat chat: $e');
+    }
+  }
+
+  // ===================================================
+  // PESAN OTOMATIS SKRIVA
+  // ===================================================
+
+  Future<List<String>> buatPesanOtomatis({
+    required int mahasiswa,
+    required int dosen,
+  }) async {
+    final db = await DatabaseHelper.instance.database;
+
+    final daftar = <String>[
+      'Halo! Selamat datang di ruang konsultasi Skriva. '
+          'Gunakan chat ini untuk berdiskusi mengenai '
+          'skripsi bersama dosen pembimbingmu.',
+    ];
+
+    final jadwal = await db.query(
+      'skriva_slot_jadwal',
+      columns: [
+        'tanggal',
+        'jam',
+        'status',
+      ],
+      where: 'mahasiswa_id = ? AND dosen_id = ?',
+      whereArgs: [mahasiswa, dosen],
+      orderBy: 'tanggal DESC, jam DESC',
+      limit: 1,
+    );
+
+    if (jadwal.isEmpty) {
+      return daftar;
+    }
+
+    final data = jadwal.first;
+
+    final tanggal = data['tanggal']?.toString() ?? '-';
+    final jam = data['jam']?.toString() ?? '-';
+    final status = data['status']?.toString() ?? '';
+
+    switch (status) {
+      case 'Menunggu':
+        daftar.add(
+          'Booking bimbingan tanggal $tanggal '
+          'pukul $jam WIB sedang menunggu persetujuan dosen.',
+        );
+        break;
+
+      case 'Terjadwal':
+        daftar.add(
+          'Jadwal bimbingan tanggal $tanggal '
+          'pukul $jam WIB sudah disetujui dosen. '
+          'Silakan persiapkan materi bimbinganmu.',
+        );
+        break;
+
+      case 'Selesai':
+        daftar.add(
+          'Bimbingan tanggal $tanggal '
+          'pukul $jam WIB telah selesai. '
+          'Jangan lupa mencatat hasil diskusi dan revisi.',
+        );
+        break;
+
+      default:
+        break;
+    }
+
+    return daftar;
+  }
+
+  // ===================================================
+  // KIRIM PESAN ASLI
+  // ===================================================
+
+  Future<void> kirimPesan() async {
+    final isi = messageController.text.trim();
+
+    if (isi.isEmpty || mengirim) return;
+
+    if (mahasiswaId == null || dosenId == null) {
+      tampilPesan('Percakapan belum siap.');
+      return;
+    }
+
+    setState(() => mengirim = true);
+
+    try {
+      await service.kirim(
+        mahasiswaId: mahasiswaId!,
+        dosenId: dosenId!,
+        isi: isi,
+      );
+
+      messageController.clear();
+
+      await muatChat();
+    } catch (e) {
+      tampilPesan('Gagal mengirim pesan: $e');
+    } finally {
+      if (mounted) {
+        setState(() => mengirim = false);
+      }
+    }
+  }
+
+  void tampilPesan(String text) {
+    if (!mounted) return;
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(text)),
     );
   }
 
-  Widget pesanKanan(String text) {
+  void scrollKeBawah() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !scrollController.hasClients) {
+        return;
+      }
+
+      scrollController.jumpTo(
+        scrollController.position.maxScrollExtent,
+      );
+    });
+  }
+
+  // ===================================================
+  // TAMPILAN BUBBLE
+  // ===================================================
+
+  Widget bubblePesan({
+    required String isi,
+    required bool milikSaya,
+  }) {
     return Align(
-      alignment: Alignment.centerRight,
+      alignment: milikSaya
+          ? Alignment.centerRight
+          : Alignment.centerLeft,
       child: Container(
-        constraints: const BoxConstraints(maxWidth: 285),
-        margin: const EdgeInsets.only(
+        constraints: const BoxConstraints(
+          maxWidth: 290,
+        ),
+        margin: EdgeInsets.only(
           bottom: 10,
-          left: 55,
+          left: milikSaya ? 55 : 0,
+          right: milikSaya ? 0 : 55,
         ),
         padding: const EdgeInsets.all(13),
         decoration: BoxDecoration(
-          color: const Color(0xFF96C1C5),
+          color: milikSaya ? blue : Colors.white,
           borderRadius: BorderRadius.circular(18),
         ),
         child: Text(
-          text,
-          style: const TextStyle(
-            color: Colors.white,
+          isi,
+          style: TextStyle(
+            color: milikSaya
+                ? Colors.white
+                : darkOlive,
             fontSize: 13,
           ),
         ),
@@ -154,32 +354,44 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
     );
   }
 
-  Widget pesanSistem(String text) {
+  Widget bubbleSistem(String isi) {
     return Align(
       alignment: Alignment.center,
       child: Container(
-        margin: const EdgeInsets.only(bottom: 14),
-        padding: const EdgeInsets.all(12),
+        width: double.infinity,
+        margin: const EdgeInsets.only(bottom: 12),
+        padding: const EdgeInsets.all(13),
         decoration: BoxDecoration(
-          color: const Color(0xFFE5F0EF),
+          color: lightBlue,
           borderRadius: BorderRadius.circular(15),
         ),
         child: Column(
           children: [
-            const Text(
-              'PESAN SISTEM',
-              style: TextStyle(
-                fontWeight: FontWeight.bold,
-                color: Color(0xFF694A47),
-                fontSize: 10,
-              ),
+            const Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(
+                  Icons.info_outline,
+                  color: olive,
+                  size: 14,
+                ),
+                SizedBox(width: 5),
+                Text(
+                  'PESAN SISTEM SKRIVA',
+                  style: TextStyle(
+                    color: olive,
+                    fontSize: 10,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ],
             ),
-            const SizedBox(height: 6),
+            const SizedBox(height: 7),
             Text(
-              text,
+              isi,
               textAlign: TextAlign.center,
               style: const TextStyle(
-                color: Color(0xFF523B39),
+                color: darkOlive,
                 fontSize: 12,
               ),
             ),
@@ -189,236 +401,201 @@ class _ChatDetailPageState extends State<ChatDetailPage> {
     );
   }
 
-  Widget _daftarPesan() {
-    if (_loading) {
+  Widget daftarPercakapan() {
+    if (loading) {
       return const Center(
         child: CircularProgressIndicator(
-          color: Color(0xFF694A47),
+          color: olive,
         ),
       );
     }
 
-    if (_messages.isEmpty) {
-      return const Center(
-        child: Text(
-          'Belum ada percakapan.\n'
-          'Booking jadwal untuk memulai bimbingan.',
-          textAlign: TextAlign.center,
-          style: TextStyle(color: Colors.grey),
+    return RefreshIndicator(
+      onRefresh: muatChat,
+      child: ListView(
+        controller: scrollController,
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.fromLTRB(
+          18,
+          16,
+          18,
+          20,
         ),
-      );
-    }
-
-    return ListView(
-      padding: const EdgeInsets.fromLTRB(18, 10, 18, 15),
-      children: [
-        const Center(
-          child: Padding(
-            padding: EdgeInsets.only(bottom: 14),
-            child: Text(
-              'Riwayat Percakapan',
-              style: TextStyle(
-                color: Colors.grey,
-                fontSize: 10,
+        children: [
+          const Center(
+            child: Padding(
+              padding: EdgeInsets.only(bottom: 15),
+              child: Text(
+                'Riwayat Percakapan',
+                style: TextStyle(
+                  color: Colors.grey,
+                  fontSize: 11,
+                ),
               ),
             ),
           ),
-        ),
-        ..._messages.map((item) {
-          final pesan = item['pesan']?.toString() ?? '';
-          final pengirim =
-              item['pengirim']?.toString() ?? '';
 
-          if (pengirim == 'sistem') {
-            return pesanSistem(pesan);
-          }
+          // Pesan otomatis bukan pesan dosen.
+          ...pesanOtomatis.map(bubbleSistem),
 
-          if (pengirim == 'mahasiswa') {
-            return pesanKanan(pesan);
-          }
+          if (messages.isEmpty)
+            const Padding(
+              padding: EdgeInsets.all(20),
+              child: Text(
+                'Belum ada pesan pribadi.\n'
+                'Mulai konsultasi melalui kolom pesan.',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: Colors.grey,
+                  fontSize: 12,
+                ),
+              ),
+            ),
 
-          return pesanKiri(pesan, simulasi: pengirim == 'simulasi_dosen');
-        }),
-      ],
+          ...messages.map((item) {
+            final isi =
+                item['isi']?.toString() ??
+                item['pesan']?.toString() ??
+                '';
+
+            final pengirimId = item['pengirim_id'];
+
+            final pengirim =
+                item['pengirim']?.toString() ?? '';
+
+            // Kompatibel dengan pesan yang memakai
+            // ID pengirim maupun label pengirim.
+            final milikSaya = pengirimId != null
+                ? pengirimId.toString() ==
+                    akunId.toString()
+                : pengirim == role;
+
+            if (pengirim == 'sistem') {
+              return bubbleSistem(isi);
+            }
+
+            return bubblePesan(
+              isi: isi,
+              milikSaya: milikSaya,
+            );
+          }),
+        ],
+      ),
     );
   }
 
+  // ===================================================
+  // HALAMAN CHAT
+  // ===================================================
+
   @override
   Widget build(BuildContext context) {
-    const orange = Color(0xFF96C1C5);
-    const darkOlive = Color(0xFF523B39);
-
     return AnimatedPage(
       child: Scaffold(
-        backgroundColor: const Color(0xFFFFF0DE),
-        body: Container(
-          decoration: const BoxDecoration(
-            gradient: LinearGradient(
-              colors: [
-                Color(0xFFFFF0DE),
-                Color(0xFFEAF3F2),
-              ],
-              begin: Alignment.topCenter,
-              end: Alignment.bottomCenter,
-            ),
+        backgroundColor: cream,
+        appBar: AppBar(
+          backgroundColor: olive,
+          foregroundColor: Colors.white,
+          title: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                namaLawanBicara,
+                style: const TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              Text(
+                role == 'dosen'
+                    ? 'Mahasiswa Bimbingan'
+                    : 'Dosen Pembimbing',
+                style: const TextStyle(
+                  fontSize: 11,
+                  color: Colors.white70,
+                ),
+              ),
+            ],
           ),
-          child: SafeArea(
-            child: Column(
-              children: [
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(
-                    15,
-                    12,
-                    15,
-                    12,
-                  ),
-                  child: Row(
-                    children: [
-                      Container(
-                        width: 42,
-                        height: 42,
+          actions: [
+            IconButton(
+              tooltip: 'Muat Ulang Chat',
+              icon: const Icon(Icons.refresh),
+              onPressed: muatChat,
+            ),
+          ],
+        ),
+        body: Column(
+          children: [
+            Expanded(
+              child: daftarPercakapan(),
+            ),
+
+            // KOLOM KIRIM PESAN
+            Container(
+              padding: const EdgeInsets.fromLTRB(
+                14,
+                10,
+                14,
+                14,
+              ),
+              color: Colors.white,
+              child: SafeArea(
+                top: false,
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 15,
+                        ),
                         decoration: BoxDecoration(
-                          color: Colors.white,
-                          shape: BoxShape.circle,
-                          boxShadow: [
-                            BoxShadow(
-                              color:
-                                  Colors.black.withOpacity(0.05),
-                              blurRadius: 8,
-                              offset: const Offset(0, 3),
-                            ),
-                          ],
+                          color: cream,
+                          borderRadius: BorderRadius.circular(25),
                         ),
-                        child: IconButton(
-                          onPressed: () {
-                            Navigator.pop(context);
-                          },
-                          icon: const Icon(
-                            Icons.arrow_back_ios_new,
-                            size: 17,
-                            color: orange,
+                        child: TextField(
+                          controller: messageController,
+                          enabled: !loading && !mengirim,
+                          maxLines: 4,
+                          minLines: 1,
+                          textInputAction: TextInputAction.send,
+                          onSubmitted: (_) => kirimPesan(),
+                          decoration: const InputDecoration(
+                            hintText: 'Tulis pesan...',
+                            border: InputBorder.none,
+                            hintStyle: TextStyle(
+                              fontSize: 12,
+                            ),
                           ),
                         ),
                       ),
-                      const SizedBox(width: 12),
-                      Container(
-                        width: 45,
-                        height: 45,
-                        decoration: const BoxDecoration(
-                          color: Color(0xFFEAF3F2),
-                          shape: BoxShape.circle,
-                        ),
-                        child: const Icon(
-                          Icons.person,
-                          color: orange,
-                        ),
+                    ),
+                    const SizedBox(width: 10),
+                    IconButton.filled(
+                      onPressed:
+                          loading || mengirim
+                              ? null
+                              : kirimPesan,
+                      style: IconButton.styleFrom(
+                        backgroundColor: blue,
+                        foregroundColor: Colors.white,
                       ),
-                      const SizedBox(width: 12),
-                      const Expanded(
-                        child: Column(
-                          crossAxisAlignment:
-                              CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'Dr. Budi Santoso, M.Kom.',
-                              style: TextStyle(
-                                color: darkOlive,
-                                fontSize: 14,
-                                fontWeight: FontWeight.bold,
+                      icon: mengirim
+                          ? const SizedBox(
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: Colors.white,
                               ),
-                            ),
-                            SizedBox(height: 3),
-                            Text(
-                              'Dosen Pembimbing',
-                              style: TextStyle(
-                                color: Colors.grey,
-                                fontSize: 10,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      GestureDetector(
-                        onTap: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) =>
-                                  const ProfilDosenPage(),
-                            ),
-                          );
-                        },
-                        child: const Icon(
-                          Icons.info_outline,
-                          color: orange,
-                        ),
-                      ),
-                    ],
-                  ),
+                            )
+                          : const Icon(Icons.send),
+                    ),
+                  ],
                 ),
-                Expanded(child: _daftarPesan()),
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.fromLTRB(
-                    15,
-                    10,
-                    15,
-                    12,
-                  ),
-                  decoration: const BoxDecoration(
-                    color: Colors.white,
-                  ),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 15,
-                          ),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFFFFF7EC),
-                            borderRadius:
-                                BorderRadius.circular(25),
-                          ),
-                          child: TextField(
-                            controller: messageController,
-                            textInputAction:
-                                TextInputAction.send,
-                            onSubmitted: (_) => kirimPesan(),
-                            decoration: const InputDecoration(
-                              hintText: 'Tulis pesan...',
-                              hintStyle: TextStyle(
-                                color: Colors.grey,
-                                fontSize: 12,
-                              ),
-                              border: InputBorder.none,
-                            ),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      GestureDetector(
-                        onTap: kirimPesan,
-                        child: Container(
-                          width: 48,
-                          height: 48,
-                          decoration: const BoxDecoration(
-                            color: orange,
-                            shape: BoxShape.circle,
-                          ),
-                          child: const Icon(
-                            Icons.send,
-                            color: Colors.white,
-                            size: 20,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
+              ),
             ),
-          ),
+          ],
         ),
       ),
     );

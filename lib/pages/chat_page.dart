@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:test/theme/jadwal_theme.dart';
-import 'package:test/database/database_helper.dart';
+import 'package:test/database/auth_database.dart';
+import 'package:test/service/skriva_chat_service.dart';
 import 'package:test/pages/chat_detail_page.dart';
+import 'package:test/theme/jadwal_theme.dart';
 
 class ChatPage extends StatefulWidget {
   const ChatPage({super.key});
@@ -11,209 +12,190 @@ class ChatPage extends StatefulWidget {
 }
 
 class _ChatPageState extends State<ChatPage> {
-  String _pesanTerakhir = 'Belum ada percakapan.';
-  String _waktuTerakhir = '';
-  bool _adaChat = false;
+  static const olive = Color(0xFF694A47);
+  static const blue = Color(0xFF96C1C5);
+  static const darkOlive = Color(0xFF523B39);
+
+  List<Map<String, Object?>> pembimbing = [];
+  Map<int, String> preview = {};
+  bool loading = true;
 
   @override
   void initState() {
     super.initState();
-    _muatChat();
+    muat();
   }
 
-  Future<void> _muatChat() async {
+  Future<void> muat() async {
     try {
-      final rows = await DatabaseHelper.instance.ambilPesanChat(
-        dosen: 'Dr. Budi Santoso',
-      );
+      final akun = await AuthDatabase.instance.sesiAktif();
+
+      if (akun == null || akun['role'] != 'mahasiswa') {
+        throw StateError('Halaman ini khusus mahasiswa.');
+      }
+
+      final mahasiswaId = akun['id'] as int;
+      final dosenList =
+          await AuthDatabase.instance.pembimbing(mahasiswaId);
+
+      final previews = <int, String>{};
+
+      for (final dosen in dosenList) {
+        final dosenId = dosen['id'] as int;
+
+        previews[dosenId] =
+            await SkrivaChatService.instance.pesanTerakhir(
+          mahasiswaId: mahasiswaId,
+          dosenId: dosenId,
+        );
+      }
 
       if (!mounted) return;
 
       setState(() {
-        _adaChat = rows.isNotEmpty;
-
-        if (rows.isEmpty) {
-          _pesanTerakhir = 'Belum ada percakapan.';
-          _waktuTerakhir = '';
-        } else {
-          final terakhir = rows.last;
-          _pesanTerakhir = terakhir['pesan']?.toString() ?? '';
-
-          final tanggal = DateTime.tryParse(
-            terakhir['created_at']?.toString() ?? '',
-          );
-
-          _waktuTerakhir = tanggal == null
-              ? ''
-              : '${tanggal.hour.toString().padLeft(2, '0')}:'
-                    '${tanggal.minute.toString().padLeft(2, '0')}';
-        }
+        pembimbing = dosenList;
+        preview = previews;
+        loading = false;
       });
     } catch (e) {
-      debugPrint('Gagal memuat chat: $e');
+      if (!mounted) return;
+      setState(() => loading = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Gagal memuat chat: $e')),
+      );
     }
   }
 
-  Future<void> _bukaDetailChat() async {
+  Future<void> bukaChat(Map<String, Object?> dosen) async {
     await Navigator.push(
       context,
-      MaterialPageRoute(builder: (_) => const ChatDetailPage()),
+      MaterialPageRoute(
+        builder: (_) => ChatDetailPage(
+          dosenId: dosen['id'] as int,
+          namaDosen: dosen['nama'].toString(),
+        ),
+      ),
     );
 
-    if (mounted) await _muatChat();
+    if (mounted) await muat();
+  }
+
+  Widget kartuDosen(Map<String, Object?> dosen) {
+    final id = dosen['id'] as int;
+    final nama = dosen['nama']?.toString() ?? '-';
+    final urutan = dosen['urutan'];
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: ListTile(
+        onTap: () => bukaChat(dosen),
+        contentPadding: const EdgeInsets.all(15),
+        leading: const CircleAvatar(
+          radius: 27,
+          backgroundColor: Color(0xFFEAF3F2),
+          child: Icon(Icons.person, color: blue, size: 30),
+        ),
+        title: Text(
+          nama,
+          style: const TextStyle(
+            color: darkOlive,
+            fontWeight: FontWeight.bold,
+            fontSize: 14,
+          ),
+        ),
+        subtitle: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Pembimbing $urutan',
+              style: const TextStyle(
+                color: olive,
+                fontSize: 11,
+              ),
+            ),
+            const SizedBox(height: 5),
+            Text(
+              preview[id] ?? 'Belum ada percakapan.',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                color: Colors.grey,
+                fontSize: 12,
+              ),
+            ),
+          ],
+        ),
+        trailing: const Icon(
+          Icons.chevron_right_rounded,
+          color: olive,
+        ),
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
-    const orange = Color(0xFF96C1C5);
-    const darkOlive = Color(0xFF523B39);
-    const olive = Color(0xFF694A47);
-
     return AnimatedPage(
       child: Scaffold(
         backgroundColor: const Color(0xFFFFF0DE),
+        appBar: AppBar(
+          title: const Text('Chat'),
+          actions: [
+            IconButton(
+              onPressed: muat,
+              icon: const Icon(Icons.refresh),
+            ),
+          ],
+        ),
         body: Container(
           decoration: const BoxDecoration(
             gradient: LinearGradient(
-              colors: [Color(0xFFFFF0DE), Color(0xFFEAF3F2)],
+              colors: [
+                Color(0xFFFFF0DE),
+                Color(0xFFEAF3F2),
+              ],
               begin: Alignment.topCenter,
               end: Alignment.bottomCenter,
             ),
           ),
-          child: SafeArea(
-            child: Column(
-              children: [
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(15, 15, 15, 10),
-                  child: Row(
+          child: loading
+              ? const Center(
+                  child: CircularProgressIndicator(color: olive),
+                )
+              : RefreshIndicator(
+                  onRefresh: muat,
+                  child: ListView(
+                    padding: const EdgeInsets.all(18),
                     children: [
-                      Container(
-                        width: 42,
-                        height: 42,
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          shape: BoxShape.circle,
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withOpacity(0.05),
-                              blurRadius: 8,
-                              offset: const Offset(0, 3),
-                            ),
-                          ],
-                        ),
-                        child: IconButton(
-                          onPressed: () => Navigator.pop(context),
-                          icon: const Icon(
-                            Icons.arrow_back_ios_new,
-                            size: 17,
-                            color: orange,
-                          ),
+                      const Text(
+                        'Konsultasi dengan Dosen Pembimbing',
+                        style: TextStyle(
+                          color: darkOlive,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 17,
                         ),
                       ),
-                      const SizedBox(width: 13),
-                      const Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Chat',
-                            style: TextStyle(
-                              color: darkOlive,
-                              fontSize: 21,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                          SizedBox(height: 3),
-                          Text(
-                            'Konsultasi dengan dosen',
-                            style: TextStyle(color: Colors.grey, fontSize: 11),
-                          ),
-                        ],
+                      const SizedBox(height: 5),
+                      const Text(
+                        'Pilih dosen untuk memulai atau melanjutkan chat.',
+                        style: TextStyle(
+                          color: Colors.grey,
+                          fontSize: 12,
+                        ),
                       ),
+                      const SizedBox(height: 20),
+                      if (pembimbing.isEmpty)
+                        const Text(
+                          'Belum ada dosen pembimbing yang ditetapkan.',
+                        ),
+                      ...pembimbing.map(kartuDosen),
                     ],
                   ),
                 ),
-                Expanded(
-                  child: SingleChildScrollView(
-                    padding: const EdgeInsets.fromLTRB(18, 10, 18, 25),
-                    child: GestureDetector(
-                      onTap: _bukaDetailChat,
-                      child: Container(
-                        width: double.infinity,
-                        padding: const EdgeInsets.all(16),
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(20),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withOpacity(0.04),
-                              blurRadius: 10,
-                              offset: const Offset(0, 4),
-                            ),
-                          ],
-                        ),
-                        child: Row(
-                          children: [
-                            Container(
-                              width: 55,
-                              height: 55,
-                              decoration: const BoxDecoration(
-                                color: Color(0xFFEAF3F2),
-                                shape: BoxShape.circle,
-                              ),
-                              child: const Icon(
-                                Icons.person,
-                                color: orange,
-                                size: 28,
-                              ),
-                            ),
-                            const SizedBox(width: 13),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  const Text(
-                                    'Dr. Budi Santoso, M.Kom.',
-                                    style: TextStyle(
-                                      color: darkOlive,
-                                      fontSize: 15,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 5),
-                                  Text(
-                                    _pesanTerakhir,
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: const TextStyle(
-                                      color: Colors.grey,
-                                      fontSize: 12,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 5),
-                                  Text(
-                                    _adaChat ? _waktuTerakhir : 'Belum dimulai',
-                                    style: const TextStyle(
-                                      color: Colors.grey,
-                                      fontSize: 10,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                            const Icon(
-                              Icons.arrow_forward_ios,
-                              color: olive,
-                              size: 15,
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
         ),
       ),
     );

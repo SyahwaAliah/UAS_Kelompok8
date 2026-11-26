@@ -315,9 +315,8 @@ class _ProfilDosenPageState extends State<ProfilDosenPage> {
                         Navigator.push(
                           context,
                           MaterialPageRoute(
-                            builder: (context) => ChatDetailPage(
-                              namaDosen: nilai('nama'),
-                            ),
+                            builder: (context) =>
+                                ChatDetailPage(namaDosen: nilai('nama')),
                           ),
                         );
                       },

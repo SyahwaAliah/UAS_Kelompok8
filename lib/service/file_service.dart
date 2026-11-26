@@ -5,9 +5,8 @@ import 'package:open_filex/open_filex.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:flutter/foundation.dart';
+import 'package:test/database/auth_database.dart';
 
-/// Model sederhana untuk dokumen yang sudah tersimpan di perangkat.
-/// Dibuat agar mudah dipakai langsung di documentCard(title, subtitle).
 class StoredDocument {
   final String name;
   final String path;
@@ -70,8 +69,23 @@ class FileService {
   // ---------------------------------------------------------------
 
   Future<Directory> _documentDirectory() async {
+    final akun = await AuthDatabase.instance.sesiAktif();
+
+    if (akun == null) {
+      throw const FileServiceException('Silakan login terlebih dahulu.');
+    }
+
+    final id = akun['id'] as int;
+    final role = akun['role']?.toString() ?? '';
+
+    if (role != 'mahasiswa' && role != 'dosen') {
+      throw const FileServiceException('Akun tidak memiliki akses dokumen.');
+    }
+
     final baseDir = await getApplicationDocumentsDirectory();
-    final dir = Directory(p.join(baseDir.path, _folderName));
+
+    // Setiap akun menggunakan folder sendiri.
+    final dir = Directory(p.join(baseDir.path, _folderName, '${role}_$id'));
 
     if (!await dir.exists()) {
       await dir.create(recursive: true);
@@ -177,6 +191,8 @@ class FileService {
 
   /// Membuka dokumen dengan aplikasi bawaan perangkat.
   Future<void> openDocument(String path) async {
+
+    await _pastikanFileMilikAkun(path);
     if (!await File(path).exists()) {
       throw const FileServiceException('File tidak ditemukan di perangkat.');
     }
@@ -198,6 +214,8 @@ class FileService {
   }
 
   Future<void> deleteDocument(String path) async {
+    await _pastikanFileMilikAkun(path);
+    
     try {
       final file = File(path);
 
@@ -223,4 +241,24 @@ class FileService {
       modified: stat.modified,
     );
   }
+
+
+Future<void> _pastikanFileMilikAkun(String path) async {
+  final folder = await _documentDirectory();
+
+  final folderPath = p.normalize(
+    p.absolute(folder.path),
+  );
+
+  final filePath = p.normalize(
+    p.absolute(path),
+  );
+
+  if (!p.isWithin(folderPath, filePath)) {
+    throw const FileServiceException(
+      'Dokumen ini bukan milik akun yang sedang login.',
+    );
+  }
+}
+
 }

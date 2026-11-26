@@ -1,10 +1,17 @@
 import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:test/theme/jadwal_theme.dart';
 import 'package:test/database/database_helper.dart';
 import 'package:test/models/checklist_model.dart';
 import 'package:test/repositories/checklist_repository.dart';
 import 'package:test/repositories/mahasiswa_repository.dart';
+import 'package:test/database/auth_database.dart';
+import 'package:test/pages/login_page.dart';
+import 'package:test/pages/jadwal_bimbingan_baru_page.dart';
+import 'package:test/pages/revisi_database_page.dart';
+import 'package:test/database/revisi_bimbingan_service.dart';
+import 'package:test/database/progress_akun_service.dart';
 
 import 'profile_mahasiswa_page.dart';
 import 'progress_skripsi_page.dart';
@@ -36,6 +43,7 @@ class _DashboardPageState extends State<DashboardPage> {
   List<ChecklistModel> _tahapan = [];
   Map<String, Object?>? _jadwalTerdekat;
   Map<String, Object?>? _catatanTerakhir;
+  Map<String, Object?>? _revisiTerakhir;
 
   static const Color olive = Color(0xFF694A47);
   static const Color darkOlive = Color(0xFF523B39);
@@ -47,7 +55,6 @@ class _DashboardPageState extends State<DashboardPage> {
   static const Color lightBlue = Color(0xFFD9ECEC);
   static const Color lightPink = Color(0xFFF4E6E3);
   static const Color softYellow = Color(0xFFFFF5E5);
-
 
   int get jumlahSelesai => _tahapan.where((item) => item.selesai).length;
 
@@ -62,14 +69,65 @@ class _DashboardPageState extends State<DashboardPage> {
 
   Future<void> _muatDashboard() async {
     try {
-      await DatabaseHelper.instance.siapkanChecklistAwal();
+      final akunAktif = await AuthDatabase.instance.sesiAktif();
 
-      final mahasiswa = await _mahasiswaRepo.semua();
+      if (akunAktif == null || akunAktif['role'] != 'mahasiswa') {
+        return;
+      }
+
+      final akunId = akunAktif['id'] as int;
+      final namaAkun = akunAktif['nama']?.toString().trim() ?? '';
+
+      // Data tampilan profil
       final avatar = await _mahasiswaRepo.ambilAvatar();
       final fotoCustom = await _mahasiswaRepo.ambilFotoCustom();
-      final tahapan = await _checklistRepo.semua();
-      final jadwal = await DatabaseHelper.instance.ambilJadwal();
-      final catatan = await DatabaseHelper.instance.ambilCatatan();
+
+      final tahapan = await ProgressAkunService.instance.semua();
+
+      final db = await DatabaseHelper.instance.database;
+
+      // Jadwal hanya untuk mahasiswa yang login.
+      final jadwal = await db.rawQuery(
+        '''
+      SELECT
+        j.id,
+        j.tanggal,
+        j.jam,
+        j.mode,
+        j.status,
+        j.dosen_id,
+        d.nama AS dosen
+      FROM skriva_slot_jadwal j
+      JOIN skriva_akun d ON d.id = j.dosen_id
+      WHERE j.mahasiswa_id = ?
+        AND j.status != 'Selesai'
+      ORDER BY j.tanggal ASC, j.jam ASC
+    ''',
+        [akunId],
+      );
+
+      // Revisi mahasiswa yang sedang login.
+      final daftarRevisi = await RevisiBimbinganService.instance.semua();
+
+      // Pastikan tabel Notes tersedia.
+      await db.execute('''
+      CREATE TABLE IF NOT EXISTS skriva_notes (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        akun_id INTEGER NOT NULL,
+        judul TEXT NOT NULL,
+        isi TEXT NOT NULL,
+        diperbarui TEXT NOT NULL
+      )
+    ''');
+
+      // Catatan hanya milik mahasiswa yang login.
+      final catatan = await db.query(
+        'skriva_notes',
+        where: 'akun_id = ?',
+        whereArgs: [akunId],
+        orderBy: 'diperbarui DESC, id DESC',
+        limit: 1,
+      );
 
       final sekarang = DateTime.now();
       final hariIni = DateTime(sekarang.year, sekarang.month, sekarang.day);
@@ -79,9 +137,7 @@ class _DashboardPageState extends State<DashboardPage> {
       for (final item in jadwal) {
         final tanggal = DateTime.tryParse(item['tanggal']?.toString() ?? '');
 
-        if (tanggal != null &&
-            !tanggal.isBefore(hariIni) &&
-            item['status'] != 'Selesai') {
+        if (tanggal != null && !tanggal.isBefore(hariIni)) {
           jadwalTerdekat = item;
           break;
         }
@@ -90,25 +146,35 @@ class _DashboardPageState extends State<DashboardPage> {
       if (!mounted) return;
 
       setState(() {
-        _namaMahasiswa = mahasiswa.isEmpty ? '' : mahasiswa.first.nama.trim();
-
+        _namaMahasiswa = namaAkun;
         _avatarMahasiswa = avatar;
         _fotoCustom = fotoCustom;
+
         _tahapan = tahapan;
         _jadwalTerdekat = jadwalTerdekat;
 
+        _revisiTerakhir = daftarRevisi.isEmpty ? null : daftarRevisi.first;
+
         _catatanTerakhir = catatan.isEmpty ? null : catatan.first;
       });
-    } catch (e) {
+    } catch (e, stackTrace) {
       debugPrint('Gagal memuat Dashboard: $e');
+      debugPrintStack(stackTrace: stackTrace);
     }
   }
 
   Widget _fotoProfilDashboard() {
-    if (_avatarMahasiswa == 6 && _fotoCustom != null &&
+    if (_avatarMahasiswa == 6 &&
+        _fotoCustom != null &&
         File(_fotoCustom!).existsSync()) {
-      return ClipOval(child: Image.file(File(_fotoCustom!), width: 48,
-          height: 48, fit: BoxFit.cover));
+      return ClipOval(
+        child: Image.file(
+          File(_fotoCustom!),
+          width: 48,
+          height: 48,
+          fit: BoxFit.cover,
+        ),
+      );
     }
 
     const images = [
@@ -167,49 +233,14 @@ class _DashboardPageState extends State<DashboardPage> {
   }
 
   Future<void> bukaDetailRevisi() async {
-    const namaTahapan = [
-      'Penentuan Topik',
-      'Bab 1',
-      'Bab 2',
-      'Bab 3',
-      'Seminar Proposal',
-    ];
-
-    final statusAwal = namaTahapan.map((nama) {
-      for (final item in _tahapan) {
-        if (item.kegiatan == nama) {
-          return item.selesai;
-        }
-      }
-      return false;
-    }).toList();
-
-    DetailRevisiPage.buka(
+    await Navigator.push(
       context,
-      statusAwal: statusAwal,
-      onProgressChanged: (statusBaru) async {
-        try {
-          for (var i = 0; i < namaTahapan.length; i++) {
-            for (final item in _tahapan) {
-              if (item.kegiatan == namaTahapan[i] &&
-                  item.selesai != statusBaru[i]) {
-                await _checklistRepo.ubah(
-                  ChecklistModel(
-                    id: item.id,
-                    kegiatan: item.kegiatan,
-                    selesai: statusBaru[i],
-                  ),
-                );
-              }
-            }
-          }
-
-          await _muatDashboard();
-        } catch (e) {
-          debugPrint('Gagal menyimpan progress: $e');
-        }
-      },
+      MaterialPageRoute(builder: (_) => const RevisiDatabasePage()),
     );
+
+    if (mounted) {
+      await _muatDashboard();
+    }
   }
 
   Future<void> bukaNotes() async {
@@ -356,7 +387,7 @@ class _DashboardPageState extends State<DashboardPage> {
     if (index == 1) {
       Navigator.push(
         context,
-        MaterialPageRoute(builder: (_) => const JadwalPage()),
+        MaterialPageRoute(builder: (_) => const JadwalBimbinganBaruPage()),
       ).then((_) => _muatDashboard());
       return;
     }
@@ -374,6 +405,7 @@ class _DashboardPageState extends State<DashboardPage> {
         context,
         MaterialPageRoute(builder: (_) => const ChatPage()),
       );
+      return;
     }
   }
 
@@ -542,63 +574,103 @@ class _DashboardPageState extends State<DashboardPage> {
     );
   }
 
-  Widget _kartuRevisi() {
-    return GestureDetector(
-      onTap: bukaDetailRevisi,
-      child: Container(
-        width: double.infinity,
-        padding: const EdgeInsets.all(18),
-        decoration: BoxDecoration(
-          color: lightPink,
-          borderRadius: BorderRadius.circular(25),
-        ),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Container(
-              width: 45,
-              height: 45,
-              decoration: BoxDecoration(
-                color: const Color(0xFFF4E6E3),
-                borderRadius: BorderRadius.circular(14),
-              ),
-              child: const Icon(Icons.edit_note_rounded, color: maroon),
+  
+Widget _kartuRevisi() {
+  final revisi = _revisiTerakhir;
+
+  final judul = revisi?['judul']?.toString() ??
+      'Belum ada revisi';
+
+  final instruksi = revisi?['catatan']?.toString() ??
+      'Belum ada revisi dari dosen pembimbing.';
+
+  final status = revisi?['status']?.toString() ?? '';
+
+  final namaDosen =
+      revisi?['nama_dosen']?.toString() ?? '';
+
+  return GestureDetector(
+    onTap: bukaDetailRevisi,
+    child: Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: lightPink,
+        borderRadius: BorderRadius.circular(25),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 45,
+            height: 45,
+            decoration: BoxDecoration(
+              color: const Color(0xFFF4E6E3),
+              borderRadius: BorderRadius.circular(14),
             ),
-            const SizedBox(width: 13),
-            const Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Bab 2',
-                    style: TextStyle(
-                      color: darkOlive,
-                      fontWeight: FontWeight.bold,
-                      fontSize: 15,
-                    ),
+            child: const Icon(
+              Icons.edit_note_rounded,
+              color: maroon,
+            ),
+          ),
+          const SizedBox(width: 13),
+          Expanded(
+            child: Column(
+              crossAxisAlignment:
+                  CrossAxisAlignment.start,
+              children: [
+                Text(
+                  judul,
+                  style: const TextStyle(
+                    color: darkOlive,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 15,
                   ),
-                  SizedBox(height: 5),
-                  Text(
-                    'Perbaiki landasan teori dan tambahkan referensi terbaru.',
-                    style: TextStyle(
-                      color: Colors.grey,
-                      fontSize: 13,
-                      height: 1.4,
-                    ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  instruksi,
+                  maxLines: 3,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: Colors.black54,
+                    fontSize: 13,
+                    height: 1.4,
                   ),
-                  SizedBox(height: 8),
+                ),
+                if (namaDosen.isNotEmpty) ...[
+                  const SizedBox(height: 8),
                   Text(
-                    'Contoh revisi',
-                    style: TextStyle(color: Colors.grey, fontSize: 11),
+                    'Dosen: $namaDosen',
+                    style: const TextStyle(
+                      fontSize: 11,
+                      color: olive,
+                    ),
                   ),
                 ],
-              ),
+                if (status.isNotEmpty) ...[
+                  const SizedBox(height: 8),
+                  Text(
+                    'Status: $status',
+                    style: const TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                      color: olive,
+                    ),
+                  ),
+                ],
+              ],
             ),
-          ],
-        ),
+          ),
+          const Icon(
+            Icons.chevron_right_rounded,
+            color: olive,
+          ),
+        ],
       ),
-    );
-  }
+    ),
+  );
+}
 
   Widget _kartuCatatan() {
     final judul = _catatanTerakhir?['judul']?.toString() ?? '';
@@ -661,6 +733,53 @@ class _DashboardPageState extends State<DashboardPage> {
     );
   }
 
+  Future<void> logout() async {
+    final konfirmasi = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text('Logout'),
+        content: const Text('Apakah kamu yakin ingin keluar dari akun Skriva?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text(
+              'Batal',
+              style: TextStyle(color: Color(0xFF694A47)),
+            ),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF694A47),
+              foregroundColor: Colors.white,
+            ),
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Logout'),
+          ),
+        ],
+      ),
+    );
+
+    if (konfirmasi != true || !mounted) return;
+
+    try {
+      await AuthDatabase.instance.logout();
+
+      if (!mounted) return;
+
+      Navigator.pushAndRemoveUntil(
+        context,
+        MaterialPageRoute(builder: (_) => const LoginPage()),
+        (route) => false,
+      );
+    } catch (e) {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('Gagal logout: $e')));
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final screenWidth = MediaQuery.of(context).size.width;
@@ -715,17 +834,36 @@ class _DashboardPageState extends State<DashboardPage> {
                               ],
                             ),
                           ),
-                          GestureDetector(
-                            onTap: bukaProfile,
-                            child: Container(
-                              width: 48,
-                              height: 48,
-                              decoration: const BoxDecoration(
-                                color: orange,
-                                shape: BoxShape.circle,
+                          Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              // Tombol Logout
+                              IconButton(
+                                onPressed: logout,
+                                tooltip: 'Logout',
+                                icon: const Icon(
+                                  Icons.logout_rounded,
+                                  color: olive,
+                                  size: 25,
+                                ),
                               ),
-                              child: _fotoProfilDashboard(),
-                            ),
+
+                              const SizedBox(width: 8),
+
+                              // Foto profil mahasiswa (tetap seperti sebelumnya)
+                              GestureDetector(
+                                onTap: bukaProfile,
+                                child: Container(
+                                  width: 48,
+                                  height: 48,
+                                  decoration: const BoxDecoration(
+                                    color: orange,
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: _fotoProfilDashboard(),
+                                ),
+                              ),
+                            ],
                           ),
                         ],
                       ),

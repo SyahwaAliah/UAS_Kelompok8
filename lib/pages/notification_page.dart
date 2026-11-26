@@ -1,33 +1,195 @@
 import 'package:flutter/material.dart';
-import 'package:test/theme/jadwal_theme.dart';
 import 'package:test/service/notification_service.dart';
+import 'package:test/theme/jadwal_theme.dart';
+import 'package:test/pages/detailbimbingan_page.dart';
+import 'package:test/pages/revisi_database_page.dart';
 
-class NotificationPage extends StatelessWidget {
+class NotificationPage extends StatefulWidget {
   const NotificationPage({super.key});
 
-  IconData _iconFor(NotificationType type) {
-    switch (type) {
-      case NotificationType.jadwal:
-        return Icons.calendar_month_outlined;
-      case NotificationType.revisi:
-        return Icons.edit_note;
-      case NotificationType.pesan:
-        return Icons.chat_bubble_outline;
-      case NotificationType.selesai:
-        return Icons.check_circle_outline;
+  @override
+  State<NotificationPage> createState() => _NotificationPageState();
+}
+
+class _NotificationPageState extends State<NotificationPage> {
+  static const olive = Color(0xFF694A47);
+  static const blue = Color(0xFF96C1C5);
+  static const darkOlive = Color(0xFF523B39);
+
+  final service = NotificationService.instance;
+
+  List<Map<String, Object?>> items = [];
+  bool loading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    muat();
+  }
+
+  Future<void> muat() async {
+    try {
+      final data = await service.ambilNotifikasiAkun();
+
+      if (!mounted) return;
+      setState(() {
+        items = data;
+        loading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => loading = false);
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('Gagal memuat notifikasi: $e')));
     }
+  }
+
+  Future<void> bukaNotifikasi(Map<String, Object?> item) async {
+    final id = item['id'] as int;
+
+    await service.tandaiNotifikasiAkunDibaca(id);
+    await muat();
+
+    if (!mounted) return;
+
+    // Jika notifikasi revisi
+    if (item['tipe'] == 'revisi') {
+      await Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => const RevisiDatabasePage()),
+      );
+      return;
+    }
+
+    // Jika notifikasi jadwal atau bimbingan selesai
+    if (item['tipe'] == 'jadwal' || item['tipe'] == 'selesai') {
+      final slotId = item['referensi_id'] as int?;
+
+      DetailBimbinganPage.open(context, slotId: slotId);
+      return;
+    }
+  }
+
+  Future<void> semuaDibaca() async {
+    await service.tandaiSemuaNotifikasiAkunDibaca();
+    await muat();
+  }
+
+  Future<void> hapusSemua() async {
+    final yes = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Hapus Notifikasi?'),
+        content: const Text(
+          'Seluruh riwayat notifikasi akun ini akan dihapus.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Batal'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Hapus'),
+          ),
+        ],
+      ),
+    );
+
+    if (yes != true) return;
+
+    await service.hapusSemuaNotifikasiAkun();
+    await muat();
+  }
+
+  String formatWaktu(String? value) {
+    final date = DateTime.tryParse(value ?? '');
+    if (date == null) return '-';
+
+    String dua(int n) => n.toString().padLeft(2, '0');
+
+    return '${dua(date.day)}/${dua(date.month)}/${date.year} '
+        '${dua(date.hour)}:${dua(date.minute)}';
+  }
+
+  Widget kartu(Map<String, Object?> item) {
+    final sudahDibaca = item['sudah_dibaca'] == 1;
+    final tipe = item['tipe']?.toString() ?? '';
+    final ikon = tipe == 'jadwal'
+        ? Icons.calendar_month_rounded
+        : tipe == 'selesai'
+        ? Icons.task_alt_rounded
+        : Icons.notifications_rounded;
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(19),
+        border: sudahDibaca ? null : Border.all(color: blue, width: 1.5),
+      ),
+      child: ListTile(
+        contentPadding: const EdgeInsets.all(15),
+        onTap: () => bukaNotifikasi(item),
+        leading: CircleAvatar(
+          backgroundColor: const Color(0xFFEAF3F2),
+          child: Icon(ikon, color: olive),
+        ),
+        title: Text(
+          item['judul']?.toString() ?? '',
+          style: const TextStyle(
+            color: darkOlive,
+            fontWeight: FontWeight.bold,
+            fontSize: 14,
+          ),
+        ),
+        subtitle: Padding(
+          padding: const EdgeInsets.only(top: 7),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                item['pesan']?.toString() ?? '',
+                style: const TextStyle(fontSize: 12),
+              ),
+              const SizedBox(height: 9),
+              Text(
+                formatWaktu(item['dibuat_pada']?.toString()),
+                style: const TextStyle(color: Colors.grey, fontSize: 10),
+              ),
+            ],
+          ),
+        ),
+        trailing: sudahDibaca
+            ? null
+            : const Icon(Icons.circle, color: blue, size: 10),
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
-    const darkOlive = Color(0xFF523B39);
-    const accent = Color(0xFF96C1C5);
-
-    final service = NotificationService.instance;
-
     return AnimatedPage(
       child: Scaffold(
         backgroundColor: const Color(0xFFFFF0DE),
+        appBar: AppBar(
+          title: const Text('Notifikasi'),
+          actions: [
+            PopupMenuButton<String>(
+              onSelected: (value) {
+                if (value == 'read') semuaDibaca();
+                if (value == 'clear') hapusSemua();
+              },
+              itemBuilder: (_) => const [
+                PopupMenuItem(
+                  value: 'read',
+                  child: Text('Tandai semua dibaca'),
+                ),
+                PopupMenuItem(value: 'clear', child: Text('Hapus riwayat')),
+              ],
+            ),
+          ],
+        ),
         body: Container(
           decoration: const BoxDecoration(
             gradient: LinearGradient(
@@ -36,240 +198,37 @@ class NotificationPage extends StatelessWidget {
               end: Alignment.bottomCenter,
             ),
           ),
-          child: SafeArea(
-            child: Column(
-              children: [
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(15, 15, 15, 10),
-                  child: Row(
+          child: loading
+              ? const Center(child: CircularProgressIndicator(color: olive))
+              : RefreshIndicator(
+                  onRefresh: muat,
+                  child: ListView(
+                    padding: const EdgeInsets.all(18),
                     children: [
-                      Container(
-                        width: 42,
-                        height: 42,
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          shape: BoxShape.circle,
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withOpacity(0.05),
-                              blurRadius: 8,
-                              offset: const Offset(0, 3),
-                            ),
-                          ],
-                        ),
-                        child: IconButton(
-                          onPressed: () => Navigator.pop(context),
-                          icon: const Icon(
-                            Icons.arrow_back_ios_new,
-                            size: 17,
-                            color: accent,
-                          ),
-                        ),
+                      const Text(
+                        'Informasi terbaru bimbinganmu',
+                        style: TextStyle(color: darkOlive),
                       ),
-                      const SizedBox(width: 13),
-                      const Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'Notifikasi',
-                              style: TextStyle(
-                                color: darkOlive,
-                                fontSize: 21,
-                                fontWeight: FontWeight.bold,
+                      const SizedBox(height: 16),
+                      if (items.isEmpty)
+                        const Padding(
+                          padding: EdgeInsets.only(top: 65),
+                          child: Column(
+                            children: [
+                              Icon(
+                                Icons.notifications_none_rounded,
+                                size: 65,
+                                color: blue,
                               ),
-                            ),
-                            SizedBox(height: 3),
-                            Text(
-                              'Informasi terbaru bimbingan',
-                              style: TextStyle(
-                                color: Colors.grey,
-                                fontSize: 11,
-                              ),
-                            ),
-                          ],
+                              SizedBox(height: 12),
+                              Text('Belum ada notifikasi'),
+                            ],
+                          ),
                         ),
-                      ),
-                      PopupMenuButton<String>(
-                        onSelected: (value) async {
-                          if (value == 'read') {
-                            await service.markAllAsRead();
-                          }
-
-                          if (value == 'clear') {
-                            await service.clearAll();
-                          }
-                        },
-                        itemBuilder: (context) => const [
-                          PopupMenuItem(
-                            value: 'read',
-                            child: Text('Tandai semua dibaca'),
-                          ),
-                          PopupMenuItem(
-                            value: 'clear',
-                            child: Text('Hapus riwayat'),
-                          ),
-                        ],
-                      ),
+                      ...items.map(kartu),
                     ],
                   ),
                 ),
-
-                Expanded(
-                  child: ValueListenableBuilder<List<AppNotification>>(
-                    valueListenable: service.notifications,
-                    builder: (context, items, _) {
-                      if (items.isEmpty) {
-                        return const Center(
-                          child: Padding(
-                            padding: EdgeInsets.all(30),
-                            child: Column(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Icon(
-                                  Icons.notifications_none_rounded,
-                                  size: 58,
-                                  color: Color(0xFF96C1C5),
-                                ),
-                                SizedBox(height: 12),
-                                Text(
-                                  'Belum ada notifikasi',
-                                  style: TextStyle(
-                                    color: darkOlive,
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                                SizedBox(height: 5),
-                                Text(
-                                  'Notifikasi akan muncul di sini.',
-                                  textAlign: TextAlign.center,
-                                  style: TextStyle(
-                                    color: Colors.grey,
-                                    fontSize: 12,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        );
-                      }
-
-                      return ListView.builder(
-                        padding: const EdgeInsets.fromLTRB(18, 10, 18, 25),
-                        itemCount: items.length,
-                        itemBuilder: (context, index) {
-                          final item = items[index];
-                          final icon = _iconFor(item.type);
-
-                          final background = item.isRead
-                              ? const Color(0xFFEAF3F2)
-                              : const Color(0xFFE5F0EF);
-
-                          return Container(
-                            width: double.infinity,
-                            margin: const EdgeInsets.only(bottom: 12),
-                            decoration: BoxDecoration(
-                              color: Colors.white,
-                              borderRadius: BorderRadius.circular(20),
-                              border: item.isRead
-                                  ? null
-                                  : Border.all(color: accent.withOpacity(0.65)),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: Colors.black.withOpacity(0.04),
-                                  blurRadius: 9,
-                                  offset: const Offset(0, 3),
-                                ),
-                              ],
-                            ),
-                            child: InkWell(
-                              borderRadius: BorderRadius.circular(20),
-                              onTap: item.isRead
-                                  ? null
-                                  : () => service.markAsRead(item.id),
-                              child: Padding(
-                                padding: const EdgeInsets.all(16),
-                                child: Row(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Container(
-                                      width: 48,
-                                      height: 48,
-                                      decoration: BoxDecoration(
-                                        color: background,
-                                        borderRadius: BorderRadius.circular(15),
-                                      ),
-                                      child: Icon(
-                                        icon,
-                                        color: const Color(0xFF694A47),
-                                        size: 23,
-                                      ),
-                                    ),
-                                    const SizedBox(width: 13),
-                                    Expanded(
-                                      child: Column(
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.start,
-                                        children: [
-                                          Row(
-                                            children: [
-                                              Expanded(
-                                                child: Text(
-                                                  item.title,
-                                                  style: const TextStyle(
-                                                    color: darkOlive,
-                                                    fontSize: 14,
-                                                    fontWeight: FontWeight.bold,
-                                                  ),
-                                                ),
-                                              ),
-                                              if (!item.isRead)
-                                                const Padding(
-                                                  padding: EdgeInsets.only(
-                                                    left: 6,
-                                                  ),
-                                                  child: CircleAvatar(
-                                                    radius: 4,
-                                                    backgroundColor: accent,
-                                                  ),
-                                                ),
-                                            ],
-                                          ),
-                                          const SizedBox(height: 5),
-                                          Text(
-                                            item.description,
-                                            style: const TextStyle(
-                                              color: Colors.grey,
-                                              fontSize: 11,
-                                              height: 1.4,
-                                            ),
-                                          ),
-                                          const SizedBox(height: 7),
-                                          Text(
-                                            item.timeLabel,
-                                            style: const TextStyle(
-                                              color: Color(0xFF694A47),
-                                              fontSize: 10,
-                                              fontWeight: FontWeight.bold,
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ),
-                          );
-                        },
-                      );
-                    },
-                  ),
-                ),
-              ],
-            ),
-          ),
         ),
       ),
     );
