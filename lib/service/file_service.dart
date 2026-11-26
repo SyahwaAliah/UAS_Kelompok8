@@ -1,11 +1,14 @@
+
 import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:open_filex/open_filex.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
-import 'package:flutter/foundation.dart';
+import 'package:sqflite/sqflite.dart';
+
 import 'package:test/database/auth_database.dart';
+import 'package:test/database/database_helper.dart';
 
 class StoredDocument {
   final String name;
@@ -20,32 +23,26 @@ class StoredDocument {
     required this.modified,
   });
 
-  /// Ekstensi file huruf besar, contoh: PDF
-  String get extension => p.extension(path).replaceFirst('.', '').toUpperCase();
+  String get extension =>
+      p.extension(path).replaceFirst('.', '').toUpperCase();
 
-  /// Nama tanpa ekstensi, cocok untuk title card
   String get title => p.basenameWithoutExtension(path);
 
-  /// Ukuran terformat, contoh: 2.4 MB
   String get formattedSize {
-    const kb = 1024;
-    const mb = kb * 1024;
+    if (sizeInBytes >= 1048576) {
+      return '${(sizeInBytes / 1048576).toStringAsFixed(1)} MB';
+    }
 
-    if (sizeInBytes >= mb) {
-      return '${(sizeInBytes / mb).toStringAsFixed(1)} MB';
+    if (sizeInBytes >= 1024) {
+      return '${(sizeInBytes / 1024).toStringAsFixed(1)} KB';
     }
-    if (sizeInBytes >= kb) {
-      return '${(sizeInBytes / kb).toStringAsFixed(1)} KB';
-    }
+
     return '$sizeInBytes B';
   }
 
-  /// Subtitle siap pakai, contoh: PDF • 2.4 MB
   String get subtitle => '$extension • $formattedSize';
 }
 
-/// Error dengan pesan Bahasa Indonesia yang bisa langsung
-/// ditampilkan lewat SnackBar.
 class FileServiceException implements Exception {
   final String message;
 
@@ -62,43 +59,59 @@ class FileService {
 
   static const String _folderName = 'dokumen_skripsi';
 
-  static const List<String> allowedExtensions = ['pdf', 'doc', 'docx'];
+  static const List<String> allowedExtensions = [
+    'pdf',
+    'doc',
+    'docx',
+  ];
 
-  // ---------------------------------------------------------------
-  // FOLDER
-  // ---------------------------------------------------------------
+  // =====================================================
+  // LOGIN & DIRECTORY
+  // =====================================================
 
-  Future<Directory> _documentDirectory() async {
+  Future<Map<String, Object?>> _akunAktif() async {
     final akun = await AuthDatabase.instance.sesiAktif();
 
     if (akun == null) {
-      throw const FileServiceException('Silakan login terlebih dahulu.');
+      throw const FileServiceException(
+        'Silakan login terlebih dahulu.',
+      );
     }
+
+    return akun;
+  }
+
+  Future<Directory> _documentDirectory() async {
+    final akun = await _akunAktif();
 
     final id = akun['id'] as int;
     final role = akun['role']?.toString() ?? '';
 
     if (role != 'mahasiswa' && role != 'dosen') {
-      throw const FileServiceException('Akun tidak memiliki akses dokumen.');
+      throw const FileServiceException(
+        'Akun tidak memiliki akses dokumen.',
+      );
     }
 
-    final baseDir = await getApplicationDocumentsDirectory();
+    final root = await getApplicationDocumentsDirectory();
 
-    // Setiap akun menggunakan folder sendiri.
-    final dir = Directory(p.join(baseDir.path, _folderName, '${role}_$id'));
+    final folder = Directory(
+      p.join(
+        root.path,
+        _folderName,
+        '${role}_$id',
+      ),
+    );
 
-    if (!await dir.exists()) {
-      await dir.create(recursive: true);
-    }
+    await folder.create(recursive: true);
 
-    return dir;
+    return folder;
   }
 
-  // ---------------------------------------------------------------
-  // PILIH FILE
-  // ---------------------------------------------------------------
+  // =====================================================
+  // PICK FILE
+  // =====================================================
 
-  /// Membuka file picker. Mengembalikan null jika dibatalkan.
   Future<File?> pickDocument() async {
     try {
       final result = await FilePicker.platform.pickFiles(
@@ -107,115 +120,125 @@ class FileService {
         allowMultiple: false,
       );
 
-      if (result == null || result.files.single.path == null) {
-        return null;
+      if (result == null) return null;
+
+      final path = result.files.single.path;
+
+      if (path == null || path.isEmpty) {
+        throw const FileServiceException(
+          'File tidak dapat dibaca.',
+        );
       }
 
-      return File(result.files.single.path!);
+      return File(path);
+    } on FileServiceException {
+      rethrow;
     } catch (_) {
       throw const FileServiceException(
-        'Gagal memilih dokumen. Silakan coba lagi.',
+        'Gagal memilih dokumen.',
       );
     }
   }
 
-  // ---------------------------------------------------------------
-  // SIMPAN LOKAL
-  // ---------------------------------------------------------------
+  // =====================================================
+  // SAVE DOCUMENT
+  // =====================================================
 
-  /// Menyalin file ke folder lokal aplikasi.
-  /// Jika nama sudah ada, otomatis diberi akhiran (1), (2), dst.
   Future<StoredDocument> saveLocally(File source) async {
+    final dir = await _documentDirectory();
+
+    if (!await source.exists()) {
+      throw const FileServiceException(
+        'File sumber tidak ditemukan.',
+      );
+    }
+
+    final ext = p.extension(source.path).toLowerCase();
+
+    if (!allowedExtensions.contains(
+      ext.replaceFirst('.', ''),
+    )) {
+      throw const FileServiceException(
+        'Format dokumen tidak didukung.',
+      );
+    }
+
+    final name = p.basenameWithoutExtension(source.path);
+
+    var target = p.join(dir.path, '$name$ext');
+    var number = 1;
+
+    while (await File(target).exists()) {
+      target = p.join(dir.path, '$name ($number)$ext');
+      number++;
+    }
+
     try {
-      final dir = await _documentDirectory();
-      final name = p.basenameWithoutExtension(source.path);
-      final ext = p.extension(source.path);
-
-      var targetPath = p.join(dir.path, '$name$ext');
-      var counter = 1;
-
-      while (await File(targetPath).exists()) {
-        targetPath = p.join(dir.path, '$name ($counter)$ext');
-        counter++;
-      }
-
-      final saved = await source.copy(targetPath);
-
-      return _toStoredDocument(saved);
+      final copied = await source.copy(target);
+      return _toStoredDocument(copied);
     } catch (_) {
       throw const FileServiceException(
-        'Gagal menyimpan dokumen ke penyimpanan lokal.',
+        'Gagal menyimpan dokumen.',
       );
     }
   }
 
-  /// Gabungan pilih + simpan. Mengembalikan null jika dibatalkan.
   Future<StoredDocument?> pickAndSave() async {
-    final file = await pickDocument();
+    final source = await pickDocument();
 
-    if (file == null) return null;
+    if (source == null) return null;
 
-    return saveLocally(file);
+    return saveLocally(source);
   }
 
-  // ---------------------------------------------------------------
-  // DAFTAR DOKUMEN
-  // ---------------------------------------------------------------
+  // =====================================================
+  // LIST DOCUMENTS
+  // =====================================================
 
-  /// Mengambil semua dokumen tersimpan, terbaru di atas.
   Future<List<StoredDocument>> getSavedDocuments() async {
-    try {
-      final dir = await _documentDirectory();
+    final dir = await _documentDirectory();
 
-      final entities = await dir.list().toList();
+    try {
+      final entries = await dir.list().toList();
 
       final documents = <StoredDocument>[];
 
-      for (final entity in entities) {
-        if (entity is File) {
-          documents.add(await _toStoredDocument(entity));
+      for (final entry in entries) {
+        if (entry is File) {
+          documents.add(
+            await _toStoredDocument(entry),
+          );
         }
       }
 
-      documents.sort((a, b) => b.modified.compareTo(a.modified));
+      documents.sort(
+        (a, b) => b.modified.compareTo(a.modified),
+      );
 
       return documents;
     } catch (_) {
-      throw const FileServiceException('Gagal mengambil daftar dokumen.');
+      throw const FileServiceException(
+        'Gagal mengambil daftar dokumen.',
+      );
     }
   }
 
-  // ---------------------------------------------------------------
-  // BUKA & HAPUS
-  // ---------------------------------------------------------------
+  // =====================================================
+  // OPEN PERSONAL DOCUMENT
+  // =====================================================
 
-  /// Membuka dokumen dengan aplikasi bawaan perangkat.
   Future<void> openDocument(String path) async {
-
     await _pastikanFileMilikAkun(path);
-    if (!await File(path).exists()) {
-      throw const FileServiceException('File tidak ditemukan di perangkat.');
-    }
-
-    final result = await OpenFilex.open(path);
-
-    switch (result.type) {
-      case ResultType.done:
-        return;
-      case ResultType.noAppToOpen:
-        throw const FileServiceException(
-          'Tidak ada aplikasi untuk membuka dokumen ini.',
-        );
-      case ResultType.fileNotFound:
-        throw const FileServiceException('File tidak ditemukan di perangkat.');
-      default:
-        throw const FileServiceException('Dokumen tidak dapat dibuka.');
-    }
+    await _bukaDenganAplikasi(path);
   }
+
+  // =====================================================
+  // DELETE PERSONAL DOCUMENT
+  // =====================================================
 
   Future<void> deleteDocument(String path) async {
     await _pastikanFileMilikAkun(path);
-    
+
     try {
       final file = File(path);
 
@@ -223,15 +246,181 @@ class FileService {
         await file.delete();
       }
     } catch (_) {
-      throw const FileServiceException('Gagal menghapus dokumen.');
+      throw const FileServiceException(
+        'Gagal menghapus dokumen.',
+      );
     }
   }
 
-  // ---------------------------------------------------------------
-  // HELPER
-  // ---------------------------------------------------------------
+  // =====================================================
+  // OPEN REVISION ATTACHMENT
+  // Mahasiswa pemilik revisi atau dosen pembimbing
+  // yang membuat revisi dapat membuka lampiran.
+  // =====================================================
 
-  Future<StoredDocument> _toStoredDocument(File file) async {
+  Future<void> openRevisiAttachment({
+    required int revisiId,
+    required int lampiranId,
+  }) async {
+    final akun = await _akunAktif();
+
+    final akunId = akun['id'] as int;
+    final role = akun['role']?.toString() ?? '';
+
+    if (role != 'mahasiswa' && role != 'dosen') {
+      throw const FileServiceException(
+        'Akses lampiran tidak diizinkan.',
+      );
+    }
+
+    final db = await DatabaseHelper.instance.database;
+
+    // Tabel lampiran dapat dibuat oleh halaman Revisi.
+    // IF NOT EXISTS menjaga data yang sudah tersimpan.
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS skriva_lampiran_revisi (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        revisi_id INTEGER NOT NULL,
+        mahasiswa_id INTEGER NOT NULL,
+        nama_file TEXT NOT NULL,
+        lokasi_file TEXT NOT NULL,
+        ukuran_file INTEGER NOT NULL DEFAULT 0,
+        dibuat_pada TEXT NOT NULL
+      )
+    ''');
+
+    // Periksa hak akses berdasarkan relasi revisi.
+    final rows = await db.rawQuery(
+      '''
+      SELECT l.lokasi_file, l.mahasiswa_id, r.dosen_id
+      FROM skriva_lampiran_revisi l
+      JOIN skriva_revisi r
+        ON r.id = l.revisi_id
+      JOIN skriva_pembimbing p
+        ON p.mahasiswa_id = r.mahasiswa_id
+       AND p.dosen_id = r.dosen_id
+      WHERE l.id = ?
+        AND l.revisi_id = ?
+        AND l.mahasiswa_id = r.mahasiswa_id
+        AND (
+          (? = 'mahasiswa' AND r.mahasiswa_id = ?)
+          OR
+          (? = 'dosen' AND r.dosen_id = ?)
+        )
+      LIMIT 1
+      ''',
+      [
+        lampiranId,
+        revisiId,
+        role,
+        akunId,
+        role,
+        akunId,
+      ],
+    );
+
+    if (rows.isEmpty) {
+      throw const FileServiceException(
+        'Lampiran tidak ditemukan atau akses ditolak.',
+      );
+    }
+
+    final storedPath =
+        rows.first['lokasi_file']?.toString() ?? '';
+
+    if (storedPath.isEmpty) {
+      throw const FileServiceException(
+        'Lokasi lampiran tidak valid.',
+      );
+    }
+
+    final dbPath = await getDatabasesPath();
+
+    final folderAman = p.normalize(
+      p.absolute(
+        p.join(
+          dbPath,
+          'skriva_lampiran',
+          '${rows.first['mahasiswa_id']}',
+          '$revisiId',
+        ),
+      ),
+    );
+
+    final filePath = p.normalize(
+      p.absolute(storedPath),
+    );
+
+    if (!p.isWithin(folderAman, filePath)) {
+      throw const FileServiceException(
+        'Lokasi lampiran tidak diizinkan.',
+      );
+    }
+
+    await _bukaDenganAplikasi(filePath);
+  }
+
+  // =====================================================
+  // PRIVATE HELPERS
+  // =====================================================
+
+  Future<void> _pastikanFileMilikAkun(
+    String path,
+  ) async {
+    final dir = await _documentDirectory();
+
+    final folderPath = p.normalize(
+      p.absolute(dir.path),
+    );
+
+    final targetPath = p.normalize(
+      p.absolute(path),
+    );
+
+    if (!p.isWithin(folderPath, targetPath)) {
+      throw const FileServiceException(
+        'Dokumen ini bukan milik akun yang sedang login.',
+      );
+    }
+  }
+
+  Future<void> _bukaDenganAplikasi(
+    String path,
+  ) async {
+    final file = File(path);
+
+    if (!await file.exists()) {
+      throw const FileServiceException(
+        'File tidak ditemukan di perangkat.',
+      );
+    }
+
+    final result = await OpenFilex.open(path);
+
+    switch (result.type) {
+      case ResultType.done:
+        return;
+
+      case ResultType.noAppToOpen:
+        throw const FileServiceException(
+          'Tidak ada aplikasi untuk membuka dokumen ini.',
+        );
+
+      case ResultType.fileNotFound:
+        throw const FileServiceException(
+          'File tidak ditemukan.',
+        );
+
+      default:
+        throw const FileServiceException(
+          'Dokumen tidak dapat dibuka.',
+        );
+    }
+  }
+
+  Future<StoredDocument> _toStoredDocument(
+    File file,
+  ) async {
     final stat = await file.stat();
 
     return StoredDocument(
@@ -241,24 +430,4 @@ class FileService {
       modified: stat.modified,
     );
   }
-
-
-Future<void> _pastikanFileMilikAkun(String path) async {
-  final folder = await _documentDirectory();
-
-  final folderPath = p.normalize(
-    p.absolute(folder.path),
-  );
-
-  final filePath = p.normalize(
-    p.absolute(path),
-  );
-
-  if (!p.isWithin(folderPath, filePath)) {
-    throw const FileServiceException(
-      'Dokumen ini bukan milik akun yang sedang login.',
-    );
-  }
-}
-
 }

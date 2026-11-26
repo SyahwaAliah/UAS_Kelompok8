@@ -1,309 +1,353 @@
-import 'package:flutter/foundation.dart';
+
 import 'package:flutter/material.dart';
+
 import 'package:test/service/file_service.dart';
-import 'package:test/theme/jadwal_theme.dart';
+import 'package:test/widgets/skriva_dashboard_ui.dart';
 
 class DokumenPage extends StatefulWidget {
   const DokumenPage({super.key});
 
   @override
-  State<DokumenPage> createState() => _DokumenPageState();
+  State<DokumenPage> createState() =>
+      _DokumenPageState();
 }
 
 class _DokumenPageState extends State<DokumenPage> {
-  static const primary = Color(0xFF694A47);
-  static const darkPrimary = Color(0xFF523B39);
-  static const orange = Color(0xFF96C1C5);
+  static const blue = SkrivaDashColors.blue;
+  static const dark = SkrivaDashColors.dark;
 
-  List<StoredDocument> _documents = [];
-  bool _isLoading = true;
+  List<StoredDocument> dokumen = [];
+
+  bool loading = true;
+  bool proses = false;
 
   @override
   void initState() {
     super.initState();
-    _loadDocuments();
+    muat();
   }
 
-  // ---------------------------------------------------------------
-  // LOGIC
-  // ---------------------------------------------------------------
+  // =====================================================
+  // LOAD DOCUMENT
+  // =====================================================
 
-  Future<void> _loadDocuments() async {
-    setState(() => _isLoading = true);
-
+  Future<void> muat() async {
     try {
-      final docs = await FileService.instance.getSavedDocuments();
+      final hasil =
+          await FileService.instance.getSavedDocuments();
 
       if (!mounted) return;
 
       setState(() {
-        _documents = docs;
-        _isLoading = false;
+        dokumen = hasil;
+        loading = false;
       });
-    } on FileServiceException catch (e) {
+    } catch (e) {
       if (!mounted) return;
 
-      setState(() => _isLoading = false);
-      _showMessage(e.message);
+      setState(() => loading = false);
+      pesan('Gagal memuat dokumen: $e');
     }
   }
 
-  Future<void> _uploadDocument() async {
-    try {
-      final doc = await FileService.instance.pickAndSave();
-
-      if (doc == null) return;
-
-      await _loadDocuments();
-
-      _showMessage('${doc.name} berhasil disimpan.');
-    } on FileServiceException catch (e) {
-      _showMessage(e.message);
-    } catch (e) {
-      debugPrint('upload error: $e');
-      _showMessage('Terjadi kesalahan saat mengunggah dokumen.');
-    }
-  }
-
-  Future<void> _openDocument(StoredDocument doc) async {
-    try {
-      await FileService.instance.openDocument(doc.path);
-    } on FileServiceException catch (e) {
-      _showMessage(e.message);
-    }
-  }
-
-  Future<void> _confirmDelete(StoredDocument doc) async {
-    final confirm = await showDialog<bool>(
-      context: context,
-      builder: (context) {
-        return AlertDialog(
-          title: const Text('Hapus dokumen?'),
-          content: Text(doc.name),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context, false),
-              child: const Text('Batal'),
-            ),
-            TextButton(
-              onPressed: () => Navigator.pop(context, true),
-              child: const Text('Hapus', style: TextStyle(color: primary)),
-            ),
-          ],
-        );
-      },
-    );
-
-    if (confirm != true) return;
-
-    try {
-      await FileService.instance.deleteDocument(doc.path);
-      await _loadDocuments();
-
-      _showMessage('Dokumen berhasil dihapus.');
-    } on FileServiceException catch (e) {
-      _showMessage(e.message);
-    }
-  }
-
-  void _showMessage(String message) {
+  void pesan(String isi) {
     if (!mounted) return;
 
-    ScaffoldMessenger.of(context)
-        .showSnackBar(SnackBar(content: Text(message)));
-  }
-
-  // ---------------------------------------------------------------
-  // UI
-  // ---------------------------------------------------------------
-
-  @override
-  Widget build(BuildContext context) {
-    return AnimatedPage(
-      child: Scaffold(
-        body: Container(
-          decoration: const BoxDecoration(
-            gradient: LinearGradient(
-              colors: [Color(0xFFFFF0DE), Color(0xFFE5F0EF)],
-              begin: Alignment.topCenter,
-              end: Alignment.bottomCenter,
-            ),
-          ),
-          child: SafeArea(
-            child: Column(
-              children: [
-                Padding(
-                  padding: const EdgeInsets.all(15),
-                  child: Row(
-                    children: [
-                      Container(
-                        width: 42,
-                        height: 42,
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          shape: BoxShape.circle,
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withOpacity(0.05),
-                              blurRadius: 8,
-                              offset: const Offset(0, 3),
-                            ),
-                          ],
-                        ),
-                        child: IconButton(
-                          onPressed: () {
-                            Navigator.pop(context);
-                          },
-                          icon: const Icon(
-                            Icons.arrow_back_ios_new,
-                            size: 18,
-                            color: primary,
-                          ),
-                        ),
-                      ),
-
-                      const SizedBox(width: 12),
-
-                      const Text(
-                        'Dokumen Skripsi',
-                        style: TextStyle(
-                          fontSize: 22,
-                          fontWeight: FontWeight.bold,
-                          color: darkPrimary,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-
-                Expanded(child: _buildBody()),
-              ],
-            ),
-          ),
-        ),
-
-        floatingActionButton: FloatingActionButton(
-          backgroundColor: primary,
-          onPressed: _uploadDocument,
-          child: const Icon(Icons.add, color: Colors.white),
-        ),
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(isi),
+        behavior: SnackBarBehavior.floating,
       ),
     );
   }
 
-  Widget _buildBody() {
-    if (_isLoading) {
-      return const Center(child: CircularProgressIndicator(color: primary));
-    }
+  // =====================================================
+  // UPLOAD DOCUMENT
+  // =====================================================
 
-    if (_documents.isEmpty) {
-      return const Center(
-        child: Padding(
-          padding: EdgeInsets.all(30),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
+  Future<void> upload() async {
+    if (proses) return;
+
+    setState(() => proses = true);
+
+    try {
+      final hasil =
+          await FileService.instance.pickAndSave();
+
+      if (hasil == null) return;
+
+      await muat();
+      pesan('${hasil.name} berhasil disimpan.');
+    } on FileServiceException catch (e) {
+      pesan(e.message);
+    } catch (e) {
+      pesan('Gagal mengunggah dokumen: $e');
+    } finally {
+      if (mounted) {
+        setState(() => proses = false);
+      }
+    }
+  }
+
+  Future<void> buka(
+    StoredDocument item,
+  ) async {
+    try {
+      await FileService.instance.openDocument(item.path);
+    } on FileServiceException catch (e) {
+      pesan(e.message);
+    }
+  }
+
+  // =====================================================
+  // DELETE DOCUMENT
+  // =====================================================
+
+  Future<void> hapus(
+    StoredDocument item,
+  ) async {
+    final setuju = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Hapus Dokumen?'),
+        content: Text(
+          'Dokumen "${item.name}" akan dihapus.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Batal'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Hapus'),
+          ),
+        ],
+      ),
+    );
+
+    if (setuju != true) return;
+
+    try {
+      await FileService.instance.deleteDocument(item.path);
+      await muat();
+      pesan('Dokumen berhasil dihapus.');
+    } on FileServiceException catch (e) {
+      pesan(e.message);
+    }
+  }
+
+  // =====================================================
+  // DOCUMENT CARD
+  // =====================================================
+
+  Widget kartuDokumen(
+    StoredDocument item,
+    int index,
+  ) {
+    const warna = [
+      SkrivaDashColors.softBlue,
+      SkrivaDashColors.lime,
+      SkrivaDashColors.peach,
+      SkrivaDashColors.lavender,
+    ];
+
+    final pdf = item.extension == 'PDF';
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 13),
+      child: InkWell(
+        onTap: () => buka(item),
+        borderRadius: BorderRadius.circular(24),
+        child: SkrivaGlassCard(
+          tint: warna[index % warna.length],
+          child: Row(
             children: [
-              Icon(Icons.folder_open_rounded, size: 64, color: orange),
-              SizedBox(height: 12),
-              Text(
-                'Belum ada dokumen',
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                  color: darkPrimary,
+              Container(
+                width: 50,
+                height: 55,
+                decoration: BoxDecoration(
+                  color: warna[index % warna.length],
+                  borderRadius: BorderRadius.circular(15),
+                ),
+                child: Icon(
+                  pdf
+                      ? Icons.picture_as_pdf_rounded
+                      : Icons.description_rounded,
+                  color: blue,
+                  size: 27,
                 ),
               ),
-              SizedBox(height: 4),
-              Text(
-                'Tekan tombol + untuk mengunggah dokumen.',
-                textAlign: TextAlign.center,
-                style: TextStyle(color: Colors.grey, fontSize: 12),
+
+              const SizedBox(width: 12),
+
+              Expanded(
+                child: Column(
+                  crossAxisAlignment:
+                      CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      item.name,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: dark,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+
+                    const SizedBox(height: 6),
+
+                    Text(
+                      item.subtitle,
+                      style: const TextStyle(
+                        color: SkrivaDashColors.muted,
+                        fontSize: 11,
+                      ),
+                    ),
+
+                    const SizedBox(height: 5),
+
+                    const Text(
+                      'Ketuk untuk membuka dokumen',
+                      style: TextStyle(
+                        color: blue,
+                        fontSize: 10,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+              PopupMenuButton<String>(
+                icon: const Icon(
+                  Icons.more_vert_rounded,
+                  color: blue,
+                ),
+                onSelected: (value) {
+                  if (value == 'open') {
+                    buka(item);
+                  } else if (value == 'delete') {
+                    hapus(item);
+                  }
+                },
+                itemBuilder: (ctx) => const [
+                  PopupMenuItem(
+                    value: 'open',
+                    child: Text('Buka Dokumen'),
+                  ),
+                  PopupMenuItem(
+                    value: 'delete',
+                    child: Text('Hapus Dokumen'),
+                  ),
+                ],
               ),
             ],
           ),
         ),
-      );
-    }
-
-    return RefreshIndicator(
-      color: primary,
-      onRefresh: _loadDocuments,
-      child: ListView.builder(
-        padding: const EdgeInsets.fromLTRB(15, 15, 15, 90),
-        itemCount: _documents.length,
-        itemBuilder: (context, index) {
-          return documentCard(_documents[index]);
-        },
       ),
     );
   }
 
-  Widget documentCard(StoredDocument doc) {
-    final isPdf = doc.extension == 'PDF';
+  // =====================================================
+  // MAIN PAGE
+  // =====================================================
 
-    return Container(
-      width: double.infinity,
-      margin: const EdgeInsets.only(bottom: 12),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: Material(
-        color: Colors.transparent,
-        borderRadius: BorderRadius.circular(20),
-        child: InkWell(
-          borderRadius: BorderRadius.circular(20),
-          onTap: () => _openDocument(doc),
-          onLongPress: () => _confirmDelete(doc),
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Row(
-              children: [
-                Container(
-                  width: 48,
-                  height: 48,
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFEAF3F2),
-                    borderRadius: BorderRadius.circular(14),
-                  ),
-                  child: Icon(
-                    isPdf
-                        ? Icons.picture_as_pdf_rounded
-                        : Icons.description_rounded,
-                    color: orange,
-                  ),
-                ),
-
-                const SizedBox(width: 12),
-
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        doc.title,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(fontWeight: FontWeight.bold),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        doc.subtitle,
-                        style: const TextStyle(
-                          color: Colors.grey,
-                          fontSize: 12,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-
-                const Icon(Icons.open_in_new_rounded, color: orange),
-              ],
-            ),
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: SkrivaDashColors.background,
+      appBar: AppBar(
+        title: const Text('Dokumen Skripsi'),
+        surfaceTintColor: Colors.transparent,
+        actions: [
+          IconButton(
+            onPressed: muat,
+            icon: const Icon(Icons.refresh_rounded),
           ),
-        ),
+        ],
       ),
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: proses ? null : upload,
+        icon: const Icon(Icons.upload_file_rounded),
+        label: const Text('Upload File'),
+      ),
+      body: loading
+          ? const Center(
+              child: CircularProgressIndicator(),
+            )
+          : RefreshIndicator(
+              color: blue,
+              onRefresh: muat,
+              child: ListView(
+                padding: const EdgeInsets.fromLTRB(
+                  20,
+                  18,
+                  20,
+                  100,
+                ),
+                children: [
+                  const SkrivaDashboardHero(
+                    eyebrow: 'STUDENT / DOCUMENTS',
+                    title: 'Your Files.\nYour Work.',
+                    subtitle:
+                        'Keep your thesis documents in one place.',
+                    icon: Icons.folder_copy_rounded,
+                  ),
+
+                  const SizedBox(height: 25),
+
+                  SkrivaSectionTitle(
+                    title: 'My Documents',
+                    subtitle:
+                        '${dokumen.length} file tersimpan',
+                  ),
+
+                  const SizedBox(height: 15),
+
+                  if (dokumen.isEmpty)
+                    const SkrivaGlassCard(
+                      tint: SkrivaDashColors.softBlue,
+                      child: Column(
+                        children: [
+                          Icon(
+                            Icons.folder_open_rounded,
+                            color: blue,
+                            size: 42,
+                          ),
+                          SizedBox(height: 12),
+                          Text(
+                            'Belum ada dokumen.',
+                            style: TextStyle(
+                              color: dark,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                          SizedBox(height: 7),
+                          Text(
+                            'Tekan Upload File untuk menyimpan dokumen.',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              color: SkrivaDashColors.muted,
+                              fontSize: 12,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+
+                  ...List.generate(
+                    dokumen.length,
+                    (index) => kartuDokumen(
+                      dokumen[index],
+                      index,
+                    ),
+                  ),
+                ],
+              ),
+            ),
     );
   }
 }

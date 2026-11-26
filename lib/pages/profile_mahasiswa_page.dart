@@ -1,12 +1,17 @@
+
 import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:path/path.dart' as p;
+import 'package:path_provider/path_provider.dart';
+import 'package:sqflite/sqflite.dart';
 
-import 'package:test/theme/jadwal_theme.dart';
 import 'package:test/database/auth_database.dart';
+import 'package:test/database/database_helper.dart';
 import 'package:test/models/mahasiswa_model.dart';
 import 'package:test/repositories/mahasiswa_repository.dart';
+import 'package:test/widgets/skriva_dashboard_ui.dart';
 
 import 'package:test/pages/checklist_page.dart';
 import 'package:test/pages/dokumen_page.dart';
@@ -22,227 +27,232 @@ class ProfileMahasiswaPage extends StatefulWidget {
 
 class _ProfileMahasiswaPageState
     extends State<ProfileMahasiswaPage> {
-  static const olive = Color(0xFF694A47);
-  static const darkOlive = Color(0xFF523B39);
-  static const orange = Color(0xFF96C1C5);
-  static const lightOrange = Color(0xFFE5F0EF);
-  static const beige = Color(0xFFEAF3F2);
-  static const cream = Color(0xFFFFF0DE);
+  static const blue = SkrivaDashColors.blue;
+  static const dark = SkrivaDashColors.dark;
+  static const lime = SkrivaDashColors.lime;
+  static const softBlue = SkrivaDashColors.softBlue;
 
-  static const List<String> _gambarBawaan = [
+  static const avatarAssets = [
     'assets/icon/icon_albert.jpeg',
     'assets/icon/icon_tracy.jpeg',
     'assets/icon/icon_syahwa.jpeg',
   ];
 
-  static const List<String> _namaAvatar = [
-    'Albert',
-    'Tracy',
-    'Syahwa',
+  static const avatarIcons = [
+    Icons.person_rounded,
+    Icons.face_rounded,
+    Icons.school_rounded,
   ];
 
-  static const List<IconData> _ikonBawaan = [
-    Icons.person,
-    Icons.face,
-    Icons.school,
-  ];
+  final repo = MahasiswaRepository();
 
-  final MahasiswaRepository _repo = MahasiswaRepository();
+  Map<String, Object?>? akun;
+  MahasiswaModel? profile;
+  List<Map<String, Object?>> pembimbing = [];
 
-  MahasiswaModel? _profile;
-  Map<String, Object?>? _akun;
-  List<Map<String, Object?>> _pembimbing = [];
+  int avatarIndex = 3;
+  String? fotoCustom;
 
-  int _avatarIndex = 0;
-  String? _fotoCustom;
-
-  bool _loading = true;
-  bool _mengubahAvatar = false;
+  bool loading = true;
+  bool menyimpan = false;
 
   @override
   void initState() {
     super.initState();
-    _refreshProfile();
+    muatProfile();
   }
 
-  // =====================================================
-  // DATA PROFIL
-  // =====================================================
+  Future<Database> get database async {
+    final db = await DatabaseHelper.instance.database;
 
-  Future<void> _refreshProfile() async {
-    try {
-      final akun = await AuthDatabase.instance.sesiAktif();
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS skriva_profile_visual (
+        akun_id INTEGER PRIMARY KEY,
+        avatar_index INTEGER NOT NULL DEFAULT 0,
+        foto_custom TEXT
+      )
+    ''');
 
-      if (akun == null || akun['role'] != 'mahasiswa') {
-        throw StateError(
-          'Silakan login menggunakan akun mahasiswa.',
-        );
-      }
-
-      final nimLogin =
-          akun['nomor_induk']?.toString() ?? '';
-
-      final daftar = await _repo.semua();
-
-      MahasiswaModel? profil;
-
-      for (final item in daftar) {
-        if (item.nim == nimLogin) {
-          profil = item;
-          break;
-        }
-      }
-
-      final pembimbing =
-          await AuthDatabase.instance.pembimbing(
-        akun['id'] as int,
-      );
-
-      final avatarIndex = await _repo.ambilAvatar();
-      final fotoCustom = await _repo.ambilFotoCustom();
-
-      if (!mounted) return;
-
-      setState(() {
-        _akun = akun;
-        _profile = profil;
-        _pembimbing = pembimbing;
-        _avatarIndex = avatarIndex;
-        _fotoCustom = fotoCustom;
-        _loading = false;
-      });
-    } catch (e) {
-      if (!mounted) return;
-
-      setState(() => _loading = false);
-      _tampilkanPesan('Gagal memuat profil: $e');
-    }
+    return db;
   }
 
   String get namaMahasiswa {
-    final namaProfil = _profile?.nama.trim() ?? '';
-
-    if (namaProfil.isNotEmpty) {
-      return namaProfil;
-    }
-
-    return _akun?['nama']?.toString() ?? 'Mahasiswa';
+    final nama = profile?.nama.trim() ?? '';
+    return nama.isNotEmpty
+        ? nama
+        : akun?['nama']?.toString() ?? 'Mahasiswa';
   }
 
-  String get nimMahasiswa {
-    return _akun?['nomor_induk']?.toString() ?? '-';
+  String get nimMahasiswa =>
+      akun?['nomor_induk']?.toString() ?? '-';
+
+  String get emailMahasiswa =>
+      akun?['email']?.toString() ?? '-';
+
+  String get prodiMahasiswa {
+    final prodi = profile?.prodi.trim() ?? '';
+    return prodi.isEmpty ? '-' : prodi;
   }
 
-  String get emailMahasiswa {
-    return _akun?['email']?.toString() ?? '-';
+  String get judulSkripsi {
+    final judul = profile?.judulSkripsi.trim() ?? '';
+    return judul.isEmpty ? '-' : judul;
   }
 
-  void _tampilkanPesan(String pesan) {
+  void pesan(String isi) {
     if (!mounted) return;
 
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(pesan)),
-    );
-  }
-
-  // =====================================================
-  // GAMBAR AVATAR
-  // =====================================================
-
-  Widget _gambarAvatar({
-    double ukuran = 110,
-  }) {
-    // Foto pilihan dari galeri
-    if (_avatarIndex == 6 && _fotoCustom != null) {
-      final foto = File(_fotoCustom!);
-
-      if (foto.existsSync()) {
-        return ClipOval(
-          child: Image.file(
-            foto,
-            width: ukuran,
-            height: ukuran,
-            fit: BoxFit.cover,
-            errorBuilder: (context, error, stackTrace) {
-              return Icon(
-                Icons.person,
-                size: ukuran * 0.55,
-                color: olive,
-              );
-            },
-          ),
-        );
-      }
-    }
-
-    // Foto Albert, Tracy, Syahwa
-    if (_avatarIndex >= 0 &&
-        _avatarIndex < _gambarBawaan.length) {
-      return ClipOval(
-        child: Image.asset(
-          _gambarBawaan[_avatarIndex],
-          width: ukuran,
-          height: ukuran,
-          fit: BoxFit.cover,
-          errorBuilder: (context, error, stackTrace) {
-            return Icon(
-              Icons.person,
-              size: ukuran * 0.55,
-              color: olive,
-            );
-          },
-        ),
-      );
-    }
-
-    // Ikon default
-    final index = _avatarIndex - 3;
-
-    final icon = index >= 0 && index < _ikonBawaan.length
-        ? _ikonBawaan[index]
-        : Icons.person;
-
-    return Center(
-      child: Icon(
-        icon,
-        size: ukuran * 0.55,
-        color: olive,
+      SnackBar(
+        content: Text(isi),
+        behavior: SnackBarBehavior.floating,
+        backgroundColor: blue,
       ),
     );
   }
 
   // =====================================================
-  // SIMPAN PILIHAN AVATAR
+  // LOAD PROFIL BERDASARKAN AKUN LOGIN
   // =====================================================
 
-  Future<void> _pilihAvatar(int index) async {
-    if (_mengubahAvatar) return;
-
-    setState(() => _mengubahAvatar = true);
-
+  Future<void> muatProfile() async {
     try {
-      await _repo.simpanAvatar(index);
+      final user = await AuthDatabase.instance.sesiAktif();
+
+      if (user == null || user['role'] != 'mahasiswa') {
+        throw StateError('Silakan login sebagai mahasiswa.');
+      }
+
+      final id = user['id'] as int;
+      final nim = user['nomor_induk']?.toString() ?? '';
+
+      final db = await database;
+      final semuaMahasiswa = await repo.semua();
+
+      MahasiswaModel? dataMahasiswa;
+
+      for (final item in semuaMahasiswa) {
+        if (item.nim == nim) {
+          dataMahasiswa = item;
+          break;
+        }
+      }
+
+      final daftarPembimbing =
+          await AuthDatabase.instance.pembimbing(id);
+
+      final visual = await db.query(
+        'skriva_profile_visual',
+        where: 'akun_id = ?',
+        whereArgs: [id],
+        limit: 1,
+      );
 
       if (!mounted) return;
 
       setState(() {
-        _avatarIndex = index;
-      });
+        akun = user;
+        profile = dataMahasiswa;
+        pembimbing = daftarPembimbing;
 
-      _tampilkanPesan('Avatar berhasil diperbarui!');
+        avatarIndex = visual.isEmpty
+            ? 3
+            : visual.first['avatar_index'] as int? ?? 3;
+
+        fotoCustom = visual.isEmpty
+            ? null
+            : visual.first['foto_custom']?.toString();
+
+        loading = false;
+      });
     } catch (e) {
-      _tampilkanPesan('Gagal menyimpan avatar: $e');
+      if (!mounted) return;
+      setState(() => loading = false);
+      pesan('Gagal memuat profil: $e');
+    }
+  }
+
+  // =====================================================
+  // AVATAR
+  // =====================================================
+
+  Widget tampilAvatar({double ukuran = 110}) {
+    if (avatarIndex == 6 &&
+        fotoCustom != null &&
+        File(fotoCustom!).existsSync()) {
+      return Image.file(
+        File(fotoCustom!),
+        width: ukuran,
+        height: ukuran,
+        fit: BoxFit.cover,
+        errorBuilder: (_, _, _) => Icon(
+          Icons.person_rounded,
+          color: blue,
+          size: ukuran * 0.5,
+        ),
+      );
+    }
+
+    if (avatarIndex >= 0 &&
+        avatarIndex < avatarAssets.length) {
+      return Image.asset(
+        avatarAssets[avatarIndex],
+        width: ukuran,
+        height: ukuran,
+        fit: BoxFit.cover,
+        errorBuilder: (_, _, _) => Icon(
+          Icons.person_rounded,
+          color: blue,
+          size: ukuran * 0.5,
+        ),
+      );
+    }
+
+    final index = avatarIndex - 3;
+
+    return Icon(
+      index >= 0 && index < avatarIcons.length
+          ? avatarIcons[index]
+          : Icons.person_rounded,
+      color: blue,
+      size: ukuran * 0.5,
+    );
+  }
+
+  Future<void> simpanAvatar(
+    int index, {
+    String? path,
+  }) async {
+    if (akun == null || menyimpan) return;
+
+    setState(() => menyimpan = true);
+
+    try {
+      final db = await database;
+
+      await db.insert(
+        'skriva_profile_visual',
+        {
+          'akun_id': akun!['id'],
+          'avatar_index': index,
+          'foto_custom': path ?? fotoCustom,
+        },
+        conflictAlgorithm: ConflictAlgorithm.replace,
+      );
+
+      await muatProfile();
+      pesan('Avatar berhasil diperbarui!');
+    } catch (e) {
+      pesan('Gagal menyimpan avatar: $e');
     } finally {
       if (mounted) {
-        setState(() => _mengubahAvatar = false);
+        setState(() => menyimpan = false);
       }
     }
   }
 
-  Future<void> _pilihFotoGaleri() async {
-    if (_mengubahAvatar) return;
-
-    setState(() => _mengubahAvatar = true);
+  Future<void> pilihFotoGaleri() async {
+    if (akun == null || menyimpan) return;
 
     try {
       final hasil = await FilePicker.platform.pickFiles(
@@ -252,52 +262,54 @@ class _ProfileMahasiswaPageState
 
       if (hasil == null) return;
 
-      final path = hasil.files.single.path;
+      final sourcePath = hasil.files.single.path;
 
-      if (path == null || path.isEmpty) {
-        throw StateError(
-          'Foto tidak ditemukan di perangkat.',
-        );
+      if (sourcePath == null) {
+        throw StateError('Foto tidak ditemukan.');
       }
 
-      // Simpan file foto pada folder mahasiswa aktif
-      await _repo.simpanFotoCustom(path);
+      final sumber = File(sourcePath);
 
-      // Index 6 digunakan untuk avatar custom
-      await _repo.simpanAvatar(6);
+      if (!await sumber.exists()) {
+        throw StateError('Foto tidak dapat dibaca.');
+      }
 
-      final fotoTersimpan = await _repo.ambilFotoCustom();
+      final root = await getApplicationDocumentsDirectory();
 
-      if (!mounted) return;
-
-      setState(() {
-        _avatarIndex = 6;
-        _fotoCustom = fotoTersimpan;
-      });
-
-      _tampilkanPesan(
-        'Foto profil berhasil diperbarui!',
+      final folder = Directory(
+        p.join(
+          root.path,
+          'skriva_avatar_mahasiswa',
+          '${akun!['id']}',
+        ),
       );
+
+      await folder.create(recursive: true);
+
+      final extension =
+          hasil.files.single.extension?.toLowerCase() ?? 'jpg';
+
+      final tujuan = File(
+        p.join(
+          folder.path,
+          '${DateTime.now().microsecondsSinceEpoch}.$extension',
+        ),
+      );
+
+      await sumber.copy(tujuan.path);
+
+      await simpanAvatar(6, path: tujuan.path);
     } catch (e) {
-      _tampilkanPesan('Gagal mengganti foto: $e');
-    } finally {
-      if (mounted) {
-        setState(() => _mengubahAvatar = false);
-      }
+      pesan('Gagal memilih foto: $e');
     }
   }
 
-  // =====================================================
-  // MENU GANTI AVATAR
-  // =====================================================
-
-  Future<void> _bukaMenuAvatar() async {
-    if (_mengubahAvatar) return;
+  Future<void> gantiAvatar() async {
+    if (menyimpan) return;
 
     final pilihan = await showModalBottomSheet<int>(
       context: context,
-      backgroundColor: cream,
-      isScrollControlled: true,
+      backgroundColor: SkrivaDashColors.background,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(
           top: Radius.circular(28),
@@ -305,188 +317,68 @@ class _ProfileMahasiswaPageState
       ),
       builder: (sheetContext) {
         return SafeArea(
-          child: SingleChildScrollView(
+          child: Padding(
             padding: const EdgeInsets.all(22),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Container(
-                  width: 42,
-                  height: 5,
-                  decoration: BoxDecoration(
-                    color: Colors.black12,
-                    borderRadius: BorderRadius.circular(10),
+                const Text(
+                  'Choose Your Avatar',
+                  style: TextStyle(
+                    color: dark,
+                    fontSize: 20,
+                    fontWeight: FontWeight.w800,
                   ),
                 ),
-
                 const SizedBox(height: 18),
-
-                const Text(
-                  'Ganti Avatar',
-                  style: TextStyle(
-                    color: darkOlive,
-                    fontSize: 21,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-
-                const SizedBox(height: 7),
-
-                const Text(
-                  'Pilih avatar favoritmu atau gunakan '
-                  'foto sendiri dari galeri.',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: Colors.grey,
-                  ),
-                ),
-
-                const SizedBox(height: 25),
-
-                // FOTO DARI ASSETS
-                Row(
-                  mainAxisAlignment:
-                      MainAxisAlignment.spaceEvenly,
-                  children: List.generate(
-                    _gambarBawaan.length,
-                    (index) {
-                      final terpilih =
-                          _avatarIndex == index;
-
-                      return GestureDetector(
-                        onTap: () {
-                          Navigator.pop(
-                            sheetContext,
-                            index,
-                          );
-                        },
-                        child: Column(
-                          children: [
-                            Container(
-                              padding: const EdgeInsets.all(3),
-                              decoration: BoxDecoration(
-                                shape: BoxShape.circle,
-                                border: Border.all(
-                                  color: terpilih
-                                      ? olive
-                                      : Colors.transparent,
-                                  width: 2,
-                                ),
-                              ),
-                              child: CircleAvatar(
-                                radius: 32,
-                                backgroundColor: lightOrange,
-                                backgroundImage: AssetImage(
-                                  _gambarBawaan[index],
-                                ),
-                              ),
-                            ),
-
-                            const SizedBox(height: 7),
-
-                            Text(
-                              _namaAvatar[index],
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: darkOlive,
-                                fontWeight: terpilih
-                                    ? FontWeight.bold
-                                    : FontWeight.normal,
-                              ),
-                            ),
-                          ],
-                        ),
-                      );
-                    },
-                  ),
-                ),
-
-                const SizedBox(height: 25),
-
-                const Text(
-                  'Atau pilih ikon',
-                  style: TextStyle(
-                    color: darkOlive,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 14,
-                  ),
-                ),
-
-                const SizedBox(height: 13),
-
-                Row(
-                  mainAxisAlignment:
-                      MainAxisAlignment.spaceEvenly,
-                  children: List.generate(
-                    _ikonBawaan.length,
-                    (index) {
-                      final avatarId = index + 3;
-                      final terpilih =
-                          _avatarIndex == avatarId;
-
-                      return GestureDetector(
-                        onTap: () {
-                          Navigator.pop(
-                            sheetContext,
-                            avatarId,
-                          );
-                        },
-                        child: Container(
-                          width: 62,
-                          height: 62,
-                          decoration: BoxDecoration(
-                            color: terpilih
-                                ? orange
-                                : lightOrange,
-                            shape: BoxShape.circle,
-                            border: Border.all(
-                              color: terpilih
-                                  ? olive
-                                  : Colors.transparent,
-                              width: 2,
-                            ),
-                          ),
-                          child: Icon(
-                            _ikonBawaan[index],
-                            size: 30,
-                            color: olive,
+                Wrap(
+                  spacing: 12,
+                  runSpacing: 12,
+                  alignment: WrapAlignment.center,
+                  children: List.generate(6, (index) {
+                    return InkWell(
+                      onTap: () =>
+                          Navigator.pop(sheetContext, index),
+                      child: Container(
+                        width: 75,
+                        height: 75,
+                        decoration: BoxDecoration(
+                          color: softBlue,
+                          borderRadius: BorderRadius.circular(18),
+                          border: Border.all(
+                            color: avatarIndex == index
+                                ? blue
+                                : Colors.transparent,
+                            width: 2,
                           ),
                         ),
-                      );
-                    },
-                  ),
+                        clipBehavior: Clip.antiAlias,
+                        child: index < 3
+                            ? Image.asset(
+                                avatarAssets[index],
+                                fit: BoxFit.cover,
+                                errorBuilder: (_, _, _) =>
+                                    const Icon(Icons.person),
+                              )
+                            : Icon(
+                                avatarIcons[index - 3],
+                                color: blue,
+                                size: 30,
+                              ),
+                      ),
+                    );
+                  }),
                 ),
-
-                const SizedBox(height: 25),
-
+                const SizedBox(height: 20),
                 SizedBox(
                   width: double.infinity,
-                  child: ElevatedButton.icon(
-                    onPressed: () {
-                      Navigator.pop(sheetContext, 6);
-                    },
-                    icon: const Icon(
-                      Icons.photo_library_outlined,
-                    ),
-                    label: const Text(
-                      'Pilih Foto dari Galeri',
-                    ),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: olive,
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(
-                        vertical: 15,
-                      ),
-                      shape: RoundedRectangleBorder(
-                        borderRadius:
-                            BorderRadius.circular(16),
-                      ),
-                    ),
+                  child: FilledButton.icon(
+                    onPressed: () =>
+                        Navigator.pop(sheetContext, 6),
+                    icon: const Icon(Icons.photo_library_rounded),
+                    label: const Text('Pilih Foto dari Galeri'),
                   ),
                 ),
-
-                const SizedBox(height: 8),
               ],
             ),
           ),
@@ -497,662 +389,513 @@ class _ProfileMahasiswaPageState
     if (!mounted || pilihan == null) return;
 
     if (pilihan == 6) {
-      await _pilihFotoGaleri();
+      await pilihFotoGaleri();
     } else {
-      await _pilihAvatar(pilihan);
+      await simpanAvatar(pilihan);
     }
   }
 
   // =====================================================
-  // EDIT PROFIL MAHASISWA
+  // EDIT PROFIL — TANPA CONTROLLER MANUAL DI DIALOG
   // =====================================================
 
-  Future<void> _editProfile() async {
-    if (_akun == null) return;
+  Future<void> editProfile() async {
+    if (akun == null || menyimpan) return;
 
-    final name = TextEditingController(
-      text: namaMahasiswa,
-    );
+    String namaBaru = namaMahasiswa;
+    String prodiBaru = profile?.prodi ?? '';
+    String judulBaru = profile?.judulSkripsi ?? '';
 
-    final prodi = TextEditingController(
-      text: _profile?.prodi ?? '',
-    );
-
-    final judul = TextEditingController(
-      text: _profile?.judulSkripsi ?? '',
-    );
-
-    final result = await showDialog<bool>(
+    final hasil = await showDialog<Map<String, String>>(
       context: context,
-      builder: (dialogContext) {
-        return AlertDialog(
-          title: const Text('Edit Profil Mahasiswa'),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(20),
+      builder: (dialogContext) => AlertDialog(
+        backgroundColor: SkrivaDashColors.background,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(25),
+        ),
+        title: const Text(
+          'Edit Profil Mahasiswa',
+          style: TextStyle(
+            color: dark,
+            fontWeight: FontWeight.w800,
           ),
-          content: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TextField(
-                  controller: name,
-                  decoration: const InputDecoration(
-                    labelText: 'Nama',
-                  ),
-                ),
-
-                const SizedBox(height: 12),
-
-                TextField(
-                  controller: prodi,
-                  decoration: const InputDecoration(
-                    labelText: 'Program Studi',
-                  ),
-                ),
-
-                const SizedBox(height: 12),
-
-                TextField(
-                  controller: judul,
-                  maxLines: 3,
-                  decoration: const InputDecoration(
-                    labelText: 'Judul Skripsi',
-                  ),
-                ),
-
-                const SizedBox(height: 12),
-
-                const Text(
-                  'NIM, email login, dan dosen pembimbing '
-                  'mengikuti data akun yang terdaftar.',
-                  style: TextStyle(
-                    color: Colors.grey,
-                    fontSize: 11,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () {
-                Navigator.pop(dialogContext, false);
-              },
-              child: const Text('Batal'),
-            ),
-            FilledButton(
-              onPressed: () {
-                Navigator.pop(dialogContext, true);
-              },
-              child: const Text('Simpan'),
-            ),
-          ],
-        );
-      },
-    );
-
-    final namaBaru = name.text.trim();
-    final prodiBaru = prodi.text.trim();
-    final judulBaru = judul.text.trim();
-
-    name.dispose();
-    prodi.dispose();
-    judul.dispose();
-
-    if (result != true) return;
-
-    if (namaBaru.isEmpty) {
-      _tampilkanPesan('Nama wajib diisi.');
-      return;
-    }
-
-    try {
-      final data = MahasiswaModel(
-        id: _profile?.id,
-        nama: namaBaru,
-        nim: nimMahasiswa,
-        email: emailMahasiswa,
-        prodi: prodiBaru,
-        semester: _profile?.semester ?? 1,
-        judulSkripsi: judulBaru,
-      );
-
-      if (_profile == null) {
-        await _repo.tambah(data);
-      } else {
-        await _repo.ubah(data);
-      }
-
-      await _refreshProfile();
-
-      _tampilkanPesan('Profil berhasil disimpan!');
-    } catch (e) {
-      _tampilkanPesan('Gagal menyimpan profil: $e');
-    }
-  }
-
-  // =====================================================
-  // WIDGET INFORMASI MAHASISWA
-  // =====================================================
-
-  Widget _labelInfo(String label, String value) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            label,
-            style: const TextStyle(
-              color: Colors.grey,
-              fontSize: 12,
-            ),
-          ),
-
-          const SizedBox(height: 5),
-
-          Text(
-            value.trim().isEmpty ? '-' : value,
-            style: const TextStyle(
-              color: darkOlive,
-              fontWeight: FontWeight.bold,
-              fontSize: 14,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // =====================================================
-  // KARTU DOSEN PEMBIMBING
-  // =====================================================
-
-  Widget _kartuPembimbing() {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(25),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.05),
-            blurRadius: 12,
-            offset: const Offset(0, 5),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Row(
-            children: [
-              Icon(
-                Icons.school_rounded,
-                color: orange,
-              ),
-              SizedBox(width: 10),
-              Text(
-                'Dosen Pembimbing',
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                  color: darkOlive,
-                ),
-              ),
-            ],
-          ),
-
-          const SizedBox(height: 15),
-
-          if (_pembimbing.isEmpty)
-            const Text(
-              'Belum ada dosen pembimbing.',
-              style: TextStyle(color: Colors.grey),
-            ),
-
-          ..._pembimbing.map((dosen) {
-            final id = dosen['id'] as int;
-            final nama =
-                dosen['nama']?.toString() ?? '-';
-
-            final urutan = dosen['urutan'];
-
-            return Container(
-              margin: const EdgeInsets.only(bottom: 12),
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: beige,
-                borderRadius: BorderRadius.circular(16),
-              ),
-              child: Row(
-                children: [
-                  const CircleAvatar(
-                    radius: 23,
-                    backgroundColor: lightOrange,
-                    child: Icon(
-                      Icons.person,
-                      color: olive,
-                    ),
-                  ),
-
-                  const SizedBox(width: 12),
-
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment:
-                          CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Pembimbing $urutan',
-                          style: const TextStyle(
-                            color: olive,
-                            fontSize: 11,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-
-                        const SizedBox(height: 4),
-
-                        Text(
-                          nama,
-                          style: const TextStyle(
-                            color: darkOlive,
-                            fontWeight: FontWeight.bold,
-                            fontSize: 13,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-
-                  IconButton(
-                    tooltip: 'Chat Dosen',
-                    icon: const Icon(
-                      Icons.chat_bubble_outline_rounded,
-                      color: olive,
-                    ),
-                    onPressed: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => ChatDetailPage(
-                            dosenId: id,
-                            namaDosen: nama,
-                          ),
-                        ),
-                      );
-                    },
-                  ),
-                ],
-              ),
-            );
-          }),
-        ],
-      ),
-    );
-  }
-
-  // =====================================================
-  // MENU CHECKLIST DAN DOKUMEN
-  // =====================================================
-
-  Widget _menuFitur({
-    required String judul,
-    required String subtitle,
-    required IconData icon,
-    required Color background,
-    required Color iconColor,
-    required VoidCallback onTap,
-  }) {
-    return Expanded(
-      child: GestureDetector(
-        onTap: onTap,
-        child: Container(
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: background,
-            borderRadius: BorderRadius.circular(18),
-          ),
+        ),
+        content: SingleChildScrollView(
           child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(
-                icon,
-                color: iconColor,
-              ),
-
-              const SizedBox(height: 8),
-
-              Text(
-                judul,
-                style: const TextStyle(
-                  color: darkOlive,
-                  fontWeight: FontWeight.bold,
+              TextFormField(
+                initialValue: namaBaru,
+                textCapitalization: TextCapitalization.words,
+                onChanged: (v) => namaBaru = v,
+                decoration: const InputDecoration(
+                  labelText: 'Nama Mahasiswa',
                 ),
               ),
-
-              const SizedBox(height: 3),
-
-              Text(
-                subtitle,
-                style: const TextStyle(
-                  color: Colors.grey,
-                  fontSize: 12,
+              const SizedBox(height: 13),
+              TextFormField(
+                initialValue: prodiBaru,
+                onChanged: (v) => prodiBaru = v,
+                decoration: const InputDecoration(
+                  labelText: 'Program Studi',
+                ),
+              ),
+              const SizedBox(height: 13),
+              TextFormField(
+                initialValue: judulBaru,
+                maxLines: 3,
+                onChanged: (v) => judulBaru = v,
+                decoration: const InputDecoration(
+                  labelText: 'Judul Skripsi',
+                ),
+              ),
+              const SizedBox(height: 12),
+              const Text(
+                'NIM dan email login tidak dapat diubah.',
+                style: TextStyle(
+                  color: SkrivaDashColors.muted,
+                  fontSize: 11,
                 ),
               ),
             ],
           ),
         ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('Batal'),
+          ),
+          FilledButton(
+            onPressed: () {
+              if (namaBaru.trim().isEmpty) {
+                ScaffoldMessenger.of(dialogContext).showSnackBar(
+                  const SnackBar(
+                    content: Text('Nama wajib diisi.'),
+                  ),
+                );
+                return;
+              }
+
+              Navigator.pop(dialogContext, {
+                'nama': namaBaru.trim(),
+                'prodi': prodiBaru.trim(),
+                'judul': judulBaru.trim(),
+              });
+            },
+            child: const Text('Simpan'),
+          ),
+        ],
+      ),
+    );
+
+    if (!mounted || hasil == null) return;
+
+    setState(() => menyimpan = true);
+
+    try {
+      final db = await database;
+
+      final data = MahasiswaModel(
+        id: profile?.id,
+        nama: hasil['nama']!,
+        nim: nimMahasiswa,
+        email: emailMahasiswa,
+        prodi: hasil['prodi']!,
+        semester: profile?.semester ?? 1,
+        judulSkripsi: hasil['judul']!,
+      );
+
+      await db.transaction((txn) async {
+        if (profile == null) {
+          await txn.insert(
+            'mahasiswa',
+            data.toMap(),
+          );
+        } else {
+          final count = await txn.update(
+            'mahasiswa',
+            data.toMap(),
+            where: 'id = ? AND nim = ?',
+            whereArgs: [
+              profile!.id,
+              nimMahasiswa,
+            ],
+          );
+
+          if (count != 1) {
+            throw StateError(
+              'Data mahasiswa tidak ditemukan.',
+            );
+          }
+        }
+
+        final updated = await txn.update(
+          'skriva_akun',
+          {'nama': hasil['nama']!},
+          where: 'id = ? AND role = ?',
+          whereArgs: [akun!['id'], 'mahasiswa'],
+        );
+
+        if (updated != 1) {
+          throw StateError('Akun mahasiswa tidak ditemukan.');
+        }
+      });
+
+      await muatProfile();
+      if (!mounted) return;
+
+      pesan('Profil mahasiswa berhasil disimpan!');
+    } catch (e) {
+      pesan('Gagal menyimpan profil: $e');
+    } finally {
+      if (mounted) {
+        setState(() => menyimpan = false);
+      }
+    }
+  }
+
+  // =====================================================
+  // WIDGET INFORMASI
+  // =====================================================
+
+  Widget informasi(
+    IconData icon,
+    String label,
+    String value,
+  ) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 15),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 43,
+            height: 43,
+            decoration: BoxDecoration(
+              color: softBlue,
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: Icon(icon, color: blue, size: 21),
+          ),
+          const SizedBox(width: 13),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label,
+                  style: const TextStyle(
+                    color: SkrivaDashColors.muted,
+                    fontSize: 11,
+                  ),
+                ),
+                const SizedBox(height: 5),
+                Text(
+                  value,
+                  style: const TextStyle(
+                    color: dark,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 13,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget kartuPembimbing(Map<String, Object?> item) {
+    final dosenId = item['id'] as int;
+    final nama = item['nama']?.toString() ?? '-';
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.all(13),
+      decoration: BoxDecoration(
+        color: softBlue.withValues(alpha: 0.55),
+        borderRadius: BorderRadius.circular(17),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 46,
+            height: 46,
+            decoration: BoxDecoration(
+              color: lime,
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: const Icon(Icons.school_rounded, color: dark),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Pembimbing ${item['urutan']}',
+                  style: const TextStyle(
+                    color: blue,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  nama,
+                  style: const TextStyle(
+                    color: dark,
+                    fontWeight: FontWeight.w800,
+                    fontSize: 13,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          IconButton(
+            tooltip: 'Chat Dosen',
+            onPressed: () => Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => ChatDetailPage(
+                  dosenId: dosenId,
+                  namaDosen: nama,
+                ),
+              ),
+            ),
+            icon: const Icon(
+              Icons.chat_bubble_outline_rounded,
+              color: blue,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget kartuProfil() {
+    return SkrivaGlassCard(
+      tint: lime,
+      child: Column(
+        children: [
+          InkWell(
+            onTap: gantiAvatar,
+            borderRadius: BorderRadius.circular(24),
+            child: Stack(
+              clipBehavior: Clip.none,
+              children: [
+                Container(
+                  width: 110,
+                  height: 110,
+                  decoration: BoxDecoration(
+                    color: softBlue,
+                    borderRadius: BorderRadius.circular(24),
+                  ),
+                  clipBehavior: Clip.antiAlias,
+                  child: Center(child: tampilAvatar()),
+                ),
+                Positioned(
+                  right: -5,
+                  bottom: -5,
+                  child: Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: blue,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: Colors.white,
+                        width: 2,
+                      ),
+                    ),
+                    child: const Icon(
+                      Icons.camera_alt_rounded,
+                      color: Colors.white,
+                      size: 17,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 17),
+          Text(
+            namaMahasiswa,
+            textAlign: TextAlign.center,
+            style: const TextStyle(
+              color: dark,
+              fontSize: 21,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            prodiMahasiswa == '-'
+                ? 'Mahasiswa Skriva'
+                : prodiMahasiswa,
+            style: const TextStyle(
+              color: SkrivaDashColors.muted,
+              fontSize: 12,
+            ),
+          ),
+          const SizedBox(height: 10),
+          TextButton.icon(
+            onPressed: menyimpan ? null : gantiAvatar,
+            icon: const Icon(Icons.photo_camera_outlined),
+            label: const Text('Ganti Avatar'),
+          ),
+        ],
       ),
     );
   }
 
   // =====================================================
-  // HALAMAN PROFIL MAHASISWA
+  // MAIN PAGE
   // =====================================================
 
   @override
   Widget build(BuildContext context) {
-    final screenWidth =
-        MediaQuery.of(context).size.width;
-
-    return AnimatedPage(
-      child: Scaffold(
-        body: Container(
-          decoration: const BoxDecoration(
-            gradient: LinearGradient(
-              colors: [
-                Color(0xFFFFF0DE),
-                Color(0xFFE5F0EF),
-              ],
-              begin: Alignment.topCenter,
-              end: Alignment.bottomCenter,
-            ),
+    return Scaffold(
+      backgroundColor: SkrivaDashColors.background,
+      appBar: AppBar(
+        title: const Text('Profil Mahasiswa'),
+        surfaceTintColor: Colors.transparent,
+        actions: [
+          IconButton(
+            onPressed: muatProfile,
+            icon: const Icon(Icons.refresh_rounded),
           ),
-          child: SafeArea(
-            child: _loading
-                ? const Center(
-                    child: CircularProgressIndicator(
-                      color: olive,
-                    ),
-                  )
-                : SingleChildScrollView(
-                    padding: EdgeInsets.all(
-                      screenWidth * 0.05,
-                    ),
+        ],
+      ),
+      body: loading
+          ? const Center(
+              child: CircularProgressIndicator(color: blue),
+            )
+          : RefreshIndicator(
+              color: blue,
+              onRefresh: muatProfile,
+              child: ListView(
+                padding: const EdgeInsets.fromLTRB(
+                  20, 18, 20, 35,
+                ),
+                children: [
+                  const SkrivaDashboardHero(
+                    eyebrow: 'SKRIVA / STUDENT PROFILE',
+                    title: 'This Is\nYour Space.',
+                    subtitle:
+                        'Your academic journey, your identity.',
+                    icon: Icons.auto_awesome_rounded,
+                  ),
+                  const SizedBox(height: 20),
+                  kartuProfil(),
+                  const SizedBox(height: 24),
+                  const SkrivaSectionTitle(
+                    title: 'Academic Information',
+                    subtitle:
+                        'Identitas dan informasi skripsimu.',
+                  ),
+                  const SizedBox(height: 13),
+                  SkrivaGlassCard(
                     child: Column(
                       children: [
-                        // HEADER
-                        Row(
-                          children: [
-                            Container(
-                              width: 42,
-                              height: 42,
-                              decoration: BoxDecoration(
-                                color: Colors.white,
-                                shape: BoxShape.circle,
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: Colors.black.withValues(
-                                      alpha: 0.05,
-                                    ),
-                                    blurRadius: 8,
-                                    offset: const Offset(0, 3),
-                                  ),
-                                ],
-                              ),
-                              child: IconButton(
-                                onPressed: () {
-                                  Navigator.pop(context);
-                                },
-                                icon: const Icon(
-                                  Icons.arrow_back_ios_new,
-                                  size: 18,
-                                  color: orange,
-                                ),
-                              ),
-                            ),
-
-                            const Expanded(
-                              child: Center(
-                                child: Text(
-                                  'Profil Mahasiswa',
-                                  style: TextStyle(
-                                    fontSize: 18,
-                                    fontWeight: FontWeight.bold,
-                                    color: darkOlive,
-                                  ),
-                                ),
-                              ),
-                            ),
-
-                            const SizedBox(width: 42),
-                          ],
+                        informasi(
+                          Icons.badge_outlined,
+                          'NIM',
+                          nimMahasiswa,
                         ),
-
-                        const SizedBox(height: 25),
-
-                        // AVATAR YANG BISA DIKLIK
-                        GestureDetector(
-                          onTap: _bukaMenuAvatar,
-                          child: Stack(
-                            clipBehavior: Clip.none,
-                            children: [
-                              Container(
-                                width: 110,
-                                height: 110,
-                                decoration: const BoxDecoration(
-                                  shape: BoxShape.circle,
-                                  color: lightOrange,
-                                ),
-                                child: _gambarAvatar(),
-                              ),
-
-                              Positioned(
-                                right: 0,
-                                bottom: 0,
-                                child: Container(
-                                  padding: const EdgeInsets.all(8),
-                                  decoration: BoxDecoration(
-                                    color: olive,
-                                    shape: BoxShape.circle,
-                                    border: Border.all(
-                                      color: Colors.white,
-                                      width: 2,
-                                    ),
-                                  ),
-                                  child: const Icon(
-                                    Icons.camera_alt,
-                                    color: Colors.white,
-                                    size: 17,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
+                        informasi(
+                          Icons.email_outlined,
+                          'Email',
+                          emailMahasiswa,
                         ),
-
-                        const SizedBox(height: 9),
-
-                        TextButton.icon(
-                          onPressed: _bukaMenuAvatar,
-                          icon: const Icon(
-                            Icons.edit,
-                            size: 15,
-                          ),
-                          label: const Text('Ganti Avatar'),
-                          style: TextButton.styleFrom(
-                            foregroundColor: olive,
-                          ),
+                        informasi(
+                          Icons.school_outlined,
+                          'Program Studi',
+                          prodiMahasiswa,
                         ),
-
-                        const SizedBox(height: 7),
-
-                        // NAMA MAHASISWA
-                        Text(
-                          namaMahasiswa,
-                          textAlign: TextAlign.center,
-                          style: const TextStyle(
-                            fontSize: 22,
-                            fontWeight: FontWeight.bold,
-                            color: darkOlive,
-                          ),
+                        informasi(
+                          Icons.calendar_month_outlined,
+                          'Semester',
+                          profile?.semester.toString() ?? '-',
                         ),
-
-                        const SizedBox(height: 5),
-
-                        Text(
-                          _profile?.prodi.isNotEmpty == true
-                              ? _profile!.prodi
-                              : 'Mahasiswa Skriva',
-                          style: const TextStyle(
-                            color: Colors.grey,
-                          ),
+                        informasi(
+                          Icons.menu_book_rounded,
+                          'Judul Skripsi',
+                          judulSkripsi,
                         ),
-
-                        const SizedBox(height: 30),
-
-                        // INFORMASI MAHASISWA
-                        Container(
-                          width: double.infinity,
-                          padding: const EdgeInsets.all(20),
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius:
-                                BorderRadius.circular(25),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.black.withValues(
-                                  alpha: 0.05,
-                                ),
-                                blurRadius: 12,
-                                offset: const Offset(0, 5),
-                              ),
-                            ],
-                          ),
-                          child: Column(
-                            crossAxisAlignment:
-                                CrossAxisAlignment.start,
-                            children: [
-                              const Text(
-                                'Informasi Mahasiswa',
-                                style: TextStyle(
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.bold,
-                                  color: darkOlive,
-                                ),
-                              ),
-
-                              const SizedBox(height: 20),
-
-                              _labelInfo(
-                                'NIM',
-                                nimMahasiswa,
-                              ),
-
-                              _labelInfo(
-                                'Email',
-                                emailMahasiswa,
-                              ),
-
-                              _labelInfo(
-                                'Program Studi',
-                                _profile?.prodi ?? '-',
-                              ),
-
-                              _labelInfo(
-                                'Semester',
-                                _profile?.semester.toString() ?? '-',
-                              ),
-
-                              _labelInfo(
-                                'Judul Skripsi',
-                                _profile?.judulSkripsi ?? '-',
-                              ),
-                            ],
-                          ),
-                        ),
-
-                        const SizedBox(height: 20),
-
-                        // DUA DOSEN PEMBIMBING
-                        _kartuPembimbing(),
-
-                        const SizedBox(height: 25),
-
-                        // CHECKLIST DAN DOKUMEN
-                        Row(
-                          children: [
-                            _menuFitur(
-                              judul: 'Checklist',
-                              subtitle: 'Progress skripsi',
-                              icon: Icons.checklist_rounded,
-                              background: lightOrange,
-                              iconColor: olive,
-                              onTap: () {
-                                Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (_) =>
-                                        const ChecklistPage(),
-                                  ),
-                                );
-                              },
-                            ),
-
-                            const SizedBox(width: 12),
-
-                            _menuFitur(
-                              judul: 'Dokumen',
-                              subtitle: 'File skripsi',
-                              icon: Icons.folder_rounded,
-                              background: beige,
-                              iconColor: orange,
-                              onTap: () {
-                                Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (_) =>
-                                        const DokumenPage(),
-                                  ),
-                                );
-                              },
-                            ),
-                          ],
-                        ),
-
-                        const SizedBox(height: 25),
-
-                        // TOMBOL EDIT PROFIL
-                        SizedBox(
-                          width: double.infinity,
-                          child: ElevatedButton.icon(
-                            onPressed: _editProfile,
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: olive,
-                              foregroundColor: Colors.white,
-                              padding: const EdgeInsets.symmetric(
-                                vertical: 15,
-                              ),
-                              shape: RoundedRectangleBorder(
-                                borderRadius:
-                                    BorderRadius.circular(16),
-                              ),
-                            ),
-                            icon: const Icon(Icons.edit),
-                            label: const Text('Edit Profil'),
-                          ),
-                        ),
-
-                        const SizedBox(height: 20),
                       ],
                     ),
                   ),
-          ),
-        ),
-      ),
+                  const SizedBox(height: 24),
+                  const SkrivaSectionTitle(
+                    title: 'Your Supervisors',
+                    subtitle: 'Dosen pembimbing yang ditetapkan.',
+                  ),
+                  const SizedBox(height: 13),
+                  SkrivaGlassCard(
+                    tint: softBlue,
+                    child: Column(
+                      children: [
+                        if (pembimbing.isEmpty)
+                          const Text(
+                            'Belum ada dosen pembimbing.',
+                          ),
+                        ...pembimbing.map(kartuPembimbing),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                  const SkrivaSectionTitle(
+                    title: 'Quick Access',
+                  ),
+                  const SizedBox(height: 13),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: SkrivaActionCard(
+                          title: 'Checklist',
+                          subtitle: 'Progress skripsi',
+                          icon: Icons.checklist_rounded,
+                          color: lime,
+                          onTap: () => Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => const ChecklistPage(),
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: SkrivaActionCard(
+                          title: 'Dokumen',
+                          subtitle: 'File skripsi',
+                          icon: Icons.folder_copy_rounded,
+                          color: softBlue,
+                          onTap: () => Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => const DokumenPage(),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 24),
+                  FilledButton.icon(
+                    onPressed: menyimpan ? null : editProfile,
+                    style: FilledButton.styleFrom(
+                      backgroundColor: blue,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.all(16),
+                    ),
+                    icon: const Icon(Icons.edit_rounded),
+                    label: const Text('Edit Profil'),
+                  ),
+                ],
+              ),
+            ),
     );
   }
 }

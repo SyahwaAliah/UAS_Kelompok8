@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
+
 import 'package:test/database/auth_database.dart';
 import 'package:test/pages/dashboard_page.dart';
 import 'package:test/pages/dashboard_dosen_page.dart';
 import 'package:test/pages/signup_page.dart';
+import 'package:test/widgets/skriva_auth_ui.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -12,11 +14,6 @@ class LoginPage extends StatefulWidget {
 }
 
 class _LoginPageState extends State<LoginPage> {
-  static const olive = Color(0xFF694A47);
-  static const darkOlive = Color(0xFF523B39);
-  static const blue = Color(0xFF96C1C5);
-  static const cream = Color(0xFFFFF0DE);
-
   final emailController = TextEditingController();
   final passwordController = TextEditingController();
 
@@ -37,7 +34,9 @@ class _LoginPageState extends State<LoginPage> {
     final password = passwordController.text;
 
     if (email.isEmpty || password.isEmpty) {
-      tampilkanPesan('Email dan password wajib diisi.');
+      tampilkanPesan(
+        'Email dan password wajib diisi.',
+      );
       return;
     }
 
@@ -52,7 +51,11 @@ class _LoginPageState extends State<LoginPage> {
       if (!mounted) return;
 
       if (akun == null) {
-        tampilkanPesan('Email atau password salah, atau akun belum aktif.');
+        setState(() => loading = false);
+        tampilkanPesan(
+          'Email atau password salah, '
+          'atau akun belum aktif.',
+        );
         return;
       }
 
@@ -60,187 +63,168 @@ class _LoginPageState extends State<LoginPage> {
           ? const DashboardDosenPage()
           : const DashboardPage();
 
+      // Mengganti route login supaya tombol Back
+      // tidak kembali ke halaman autentikasi.
       Navigator.of(context).pushAndRemoveUntil(
-        MaterialPageRoute(builder: (_) => tujuan),
+        MaterialPageRoute(
+          builder: (_) => tujuan,
+        ),
         (route) => false,
       );
     } catch (e) {
+      if (!mounted) return;
+
+      setState(() => loading = false);
       tampilkanPesan('Gagal login: $e');
-    } finally {
-      if (mounted) setState(() => loading = false);
     }
   }
 
   void tampilkanPesan(String pesan) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(pesan)));
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(pesan),
+        behavior: SnackBarBehavior.floating,
+        backgroundColor: SkrivaAuthColors.brown,
+      ),
+    );
+  }
+
+  Future<void> bukaAktivasi() async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => const SignupPage(),
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: cream,
-      body: Container(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            colors: [cream, Color(0xFFE5F0EF)],
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
+    return SkrivaAuthShell(
+      heading: 'Hello, welcome back!',
+      description:
+          'Your thesis journey continues here.',
+      heroIcon: Icons.auto_stories_rounded,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Row(
+            children: [
+              Expanded(
+                child: Text(
+                  'Sign In',
+                  style: TextStyle(
+                    color: SkrivaAuthColors.darkBrown,
+                    fontSize: 25,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+              Icon(
+                Icons.auto_awesome_rounded,
+                color: SkrivaAuthColors.blue,
+                size: 23,
+              ),
+            ],
           ),
-        ),
-        child: SafeArea(
-          child: Center(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.all(25),
-              child: Column(
-                children: [
-                  Container(
-                    width: 95,
-                    height: 95,
-                    decoration: const BoxDecoration(
-                      color: olive,
-                      shape: BoxShape.circle,
-                    ),
-                    child: const Icon(
-                      Icons.school_rounded,
-                      color: Colors.white,
-                      size: 50,
-                    ),
-                  ),
-                  const SizedBox(height: 18),
-                  const Text(
-                    'Skriva',
-                    style: TextStyle(
-                      color: darkOlive,
-                      fontSize: 32,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  const SizedBox(height: 5),
-                  const Text(
-                    'Your Thesis Companion',
-                    style: TextStyle(color: olive, fontSize: 13),
-                  ),
-                  const SizedBox(height: 35),
-                  Container(
-                    padding: const EdgeInsets.all(25),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(25),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text(
-                          'Welcome Back!',
-                          style: TextStyle(
-                            fontSize: 23,
-                            color: darkOlive,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        const SizedBox(height: 5),
-                        const Text(
-                          'Masuk menggunakan akun Skriva kamu.',
-                          style: TextStyle(color: Colors.grey, fontSize: 12),
-                        ),
-                        const SizedBox(height: 25),
-                        TextField(
-                          controller: emailController,
-                          keyboardType: TextInputType.emailAddress,
-                          decoration: InputDecoration(
-                            labelText: 'Email',
-                            prefixIcon: const Icon(
-                              Icons.email_outlined,
-                              color: olive,
-                            ),
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(15),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(height: 15),
-                        TextField(
-                          controller: passwordController,
-                          obscureText: sembunyikanPassword,
-                          decoration: InputDecoration(
-                            labelText: 'Password',
-                            prefixIcon: const Icon(
-                              Icons.lock_outline,
-                              color: olive,
-                            ),
-                            suffixIcon: IconButton(
-                              icon: Icon(
-                                sembunyikanPassword
-                                    ? Icons.visibility_off
-                                    : Icons.visibility,
-                              ),
-                              onPressed: () {
-                                setState(() {
-                                  sembunyikanPassword = !sembunyikanPassword;
-                                });
-                              },
-                            ),
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(15),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(height: 25),
-                        SizedBox(
-                          width: double.infinity,
-                          height: 52,
-                          child: ElevatedButton(
-                            onPressed: loading ? null : login,
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: olive,
-                              foregroundColor: Colors.white,
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(15),
-                              ),
-                            ),
-                            child: loading
-                                ? const CircularProgressIndicator(
-                                    color: Colors.white,
-                                  )
-                                : const Text(
-                                    'Login',
-                                    style: TextStyle(
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                          ),
-                        ),
-                        const SizedBox(height: 18),
-                        Center(
-                          child: TextButton(
-                            onPressed: () {
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (_) => const SignupPage(),
-                                ),
-                              );
-                            },
-                            child: const Text(
-                              'Belum aktivasi akun? Sign Up',
-                              style: TextStyle(color: olive),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 20),
-                  const Text(
-                    'Skripsi lebih terarah bersama Skriva.',
-                    style: TextStyle(color: blue, fontSize: 12),
-                  ),
-                ],
+
+          const SizedBox(height: 5),
+
+          const Text(
+            'Masuk ke akun Skriva untuk melanjutkan '
+            'bimbingan skripsimu.',
+            style: TextStyle(
+              color: Color(0xFF8C8582),
+              fontSize: 12,
+              height: 1.6,
+            ),
+          ),
+
+          const SizedBox(height: 25),
+
+          SkrivaAuthField(
+            label: 'Email Address',
+            hint: 'Masukkan email terdaftar',
+            icon: Icons.alternate_email_rounded,
+            controller: emailController,
+            keyboardType: TextInputType.emailAddress,
+          ),
+
+          const SizedBox(height: 18),
+
+          SkrivaAuthField(
+            label: 'Password',
+            hint: 'Masukkan password',
+            icon: Icons.lock_outline_rounded,
+            controller: passwordController,
+            obscureText: sembunyikanPassword,
+            textInputAction: TextInputAction.done,
+            onSubmitted: (_) => login(),
+            suffixIcon: IconButton(
+              tooltip: sembunyikanPassword
+                  ? 'Tampilkan password'
+                  : 'Sembunyikan password',
+              onPressed: () {
+                setState(() {
+                  sembunyikanPassword =
+                      !sembunyikanPassword;
+                });
+              },
+              icon: Icon(
+                sembunyikanPassword
+                    ? Icons.visibility_off_outlined
+                    : Icons.visibility_outlined,
+                color: SkrivaAuthColors.brown,
+                size: 20,
               ),
             ),
           ),
-        ),
+
+          const SizedBox(height: 28),
+
+          SkrivaAuthButton(
+            label: 'Sign In',
+            icon: Icons.arrow_forward_rounded,
+            loading: loading,
+            onPressed: login,
+          ),
+
+          const SizedBox(height: 22),
+
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Flexible(
+                child: Text(
+                  'Belum aktivasi akun?',
+                  style: TextStyle(
+                    color: Color(0xFF857D79),
+                    fontSize: 12,
+                  ),
+                ),
+              ),
+              TextButton(
+                onPressed: loading ? null : bukaAktivasi,
+                style: TextButton.styleFrom(
+                  foregroundColor:
+                      SkrivaAuthColors.brown,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 7,
+                  ),
+                ),
+                child: const Text(
+                  'Sign Up',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }

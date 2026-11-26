@@ -1,8 +1,8 @@
-
 import 'package:flutter/material.dart';
+
 import 'package:test/database/auth_database.dart';
 import 'package:test/database/jadwal_bimbingan_service.dart';
-import 'package:test/theme/jadwal_theme.dart';
+import 'package:test/widgets/skriva_dashboard_ui.dart';
 
 class JadwalBimbinganBaruPage extends StatefulWidget {
   const JadwalBimbinganBaruPage({super.key});
@@ -14,12 +14,14 @@ class JadwalBimbinganBaruPage extends StatefulWidget {
 
 class _JadwalBimbinganBaruPageState
     extends State<JadwalBimbinganBaruPage> {
-  static const olive = Color(0xFF694A47);
-  static const blue = Color(0xFF96C1C5);
+  static const blue = SkrivaDashColors.blue;
+  static const dark = SkrivaDashColors.dark;
+  static const lime = SkrivaDashColors.lime;
 
   final service = JadwalBimbinganService.instance;
 
   List<Map<String, Object?>> items = [];
+
   bool loading = true;
   bool dosen = false;
   bool proses = false;
@@ -40,8 +42,14 @@ class _JadwalBimbinganBaruPageState
     muat();
   }
 
+  // =====================================================
+  // LOAD DATA
+  // =====================================================
+
   Future<void> muat() async {
-    if (mounted) setState(() => loading = true);
+    if (mounted) {
+      setState(() => loading = true);
+    }
 
     try {
       final akun = await AuthDatabase.instance.sesiAktif();
@@ -72,123 +80,163 @@ class _JadwalBimbinganBaruPageState
 
   void pesan(String value) {
     if (!mounted) return;
+
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(value)),
+      SnackBar(
+        content: Text(value),
+        behavior: SnackBarBehavior.floating,
+        backgroundColor: blue,
+      ),
     );
   }
 
-  Future<void> jalankan(Future<void> Function() tindakan) async {
+  Future<void> jalankan(
+    Future<void> Function() tindakan,
+  ) async {
     if (proses) return;
 
     setState(() => proses = true);
+
     try {
       await tindakan();
       await muat();
     } catch (e) {
       pesan('$e');
     } finally {
-      if (mounted) setState(() => proses = false);
+      if (mounted) {
+        setState(() => proses = false);
+      }
     }
   }
+
+  // =====================================================
+  // BUAT SLOT
+  // =====================================================
 
   Future<void> buatJadwal() async {
     DateTime tanggal = DateTime.now().add(
       const Duration(days: 1),
     );
+
     String jam = jamTersedia.first;
     String mode = 'Tatap Muka';
 
     final result = await showDialog<bool>(
       context: context,
-      builder: (dialogContext) => StatefulBuilder(
-        builder: (context, setDialogState) {
-          return AlertDialog(
-            title: const Text('Buat Slot Bimbingan'),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(20),
-            ),
-            content: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text('Tanggal'),
-                  const SizedBox(height: 8),
-                  OutlinedButton.icon(
-                    icon: const Icon(Icons.calendar_month),
-                    label: Text(
-                      '${tanggal.day}/${tanggal.month}/${tanggal.year}',
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              backgroundColor: SkrivaDashColors.background,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(26),
+              ),
+              title: const Text(
+                'Buat Slot Bimbingan',
+                style: TextStyle(
+                  color: dark,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Tanggal',
+                      style: TextStyle(
+                        color: dark,
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
-                    onPressed: () async {
-                      final dipilih = await showDatePicker(
-                        context: context,
-                        initialDate: tanggal,
-                        firstDate: DateTime.now(),
-                        lastDate: DateTime.now().add(
-                          const Duration(days: 365),
+                    const SizedBox(height: 8),
+                    OutlinedButton.icon(
+                      onPressed: () async {
+                        final dipilih = await showDatePicker(
+                          context: dialogContext,
+                          initialDate: tanggal,
+                          firstDate: DateTime.now(),
+                          lastDate: DateTime.now().add(
+                            const Duration(days: 365),
+                          ),
+                        );
+
+                        if (dipilih != null) {
+                          setDialogState(() => tanggal = dipilih);
+                        }
+                      },
+                      icon: const Icon(
+                        Icons.calendar_month_rounded,
+                      ),
+                      label: Text(
+                        '${tanggal.day}/${tanggal.month}/${tanggal.year}',
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    DropdownButtonFormField<String>(
+                      initialValue: jam,
+                      decoration: const InputDecoration(
+                        labelText: 'Jam Bimbingan',
+                        border: OutlineInputBorder(),
+                      ),
+                      items: jamTersedia.map((item) {
+                        return DropdownMenuItem(
+                          value: item,
+                          child: Text(item),
+                        );
+                      }).toList(),
+                      onChanged: (value) {
+                        if (value != null) {
+                          setDialogState(() => jam = value);
+                        }
+                      },
+                    ),
+                    const SizedBox(height: 14),
+                    DropdownButtonFormField<String>(
+                      initialValue: mode,
+                      decoration: const InputDecoration(
+                        labelText: 'Mode Bimbingan',
+                        border: OutlineInputBorder(),
+                      ),
+                      items: const [
+                        DropdownMenuItem(
+                          value: 'Tatap Muka',
+                          child: Text('Tatap Muka'),
                         ),
-                      );
-                      if (dipilih != null) {
-                        setDialogState(() => tanggal = dipilih);
-                      }
-                    },
-                  ),
-                  const SizedBox(height: 16),
-                  DropdownButtonFormField<String>(
-                    initialValue: jam,
-                    decoration: const InputDecoration(
-                      labelText: 'Jam Bimbingan',
+                        DropdownMenuItem(
+                          value: 'Video Call',
+                          child: Text('Video Call'),
+                        ),
+                      ],
+                      onChanged: (value) {
+                        if (value != null) {
+                          setDialogState(() => mode = value);
+                        }
+                      },
                     ),
-                    items: jamTersedia.map((item) {
-                      return DropdownMenuItem(
-                        value: item,
-                        child: Text(item),
-                      );
-                    }).toList(),
-                    onChanged: (value) {
-                      if (value != null) {
-                        setDialogState(() => jam = value);
-                      }
-                    },
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () =>
+                      Navigator.pop(dialogContext, false),
+                  child: const Text('Batal'),
+                ),
+                FilledButton(
+                  style: FilledButton.styleFrom(
+                    backgroundColor: blue,
                   ),
-                  const SizedBox(height: 12),
-                  DropdownButtonFormField<String>(
-                    initialValue: mode,
-                    decoration: const InputDecoration(
-                      labelText: 'Mode Bimbingan',
-                    ),
-                    items: const [
-                      DropdownMenuItem(
-                        value: 'Tatap Muka',
-                        child: Text('Tatap Muka'),
-                      ),
-                      DropdownMenuItem(
-                        value: 'Video Call',
-                        child: Text('Video Call'),
-                      ),
-                    ],
-                    onChanged: (value) {
-                      if (value != null) {
-                        setDialogState(() => mode = value);
-                      }
-                    },
-                  ),
-                ],
-              ),
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(dialogContext, false),
-                child: const Text('Batal'),
-              ),
-              FilledButton(
-                onPressed: () => Navigator.pop(dialogContext, true),
-                child: const Text('Buat Jadwal'),
-              ),
-            ],
-          );
-        },
-      ),
+                  onPressed: () =>
+                      Navigator.pop(dialogContext, true),
+                  child: const Text('Buat Jadwal'),
+                ),
+              ],
+            );
+          },
+        );
+      },
     );
 
     if (result != true) return;
@@ -210,7 +258,17 @@ class _JadwalBimbinganBaruPageState
     final result = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: Text(judul),
+        backgroundColor: SkrivaDashColors.background,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(24),
+        ),
+        title: Text(
+          judul,
+          style: const TextStyle(
+            color: dark,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
         content: Text(isi),
         actions: [
           TextButton(
@@ -218,6 +276,9 @@ class _JadwalBimbinganBaruPageState
             child: const Text('Batal'),
           ),
           FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: blue,
+            ),
             onPressed: () => Navigator.pop(ctx, true),
             child: const Text('Ya, Lanjutkan'),
           ),
@@ -227,6 +288,10 @@ class _JadwalBimbinganBaruPageState
 
     return result == true;
   }
+
+  // =====================================================
+  // BOOKING / APPROVAL / HAPUS
+  // =====================================================
 
   Future<void> booking(int id) async {
     final yes = await konfirmasi(
@@ -270,20 +335,105 @@ class _JadwalBimbinganBaruPageState
     });
   }
 
+  // =====================================================
+  // STATUS
+  // =====================================================
+
   Color warnaStatus(String status) {
     switch (status) {
       case 'Tersedia':
-        return const Color(0xFF2F806B);
+        return const Color(0xFF358457);
       case 'Menunggu':
-        return const Color(0xFFD18935);
+        return const Color(0xFFBA7A20);
       case 'Terjadwal':
-        return const Color(0xFF478DA0);
+        return blue;
       case 'Selesai':
-        return olive;
+        return const Color(0xFF68758B);
       default:
-        return Colors.grey;
+        return SkrivaDashColors.muted;
     }
   }
+
+  Color backgroundStatus(String status) {
+    switch (status) {
+      case 'Tersedia':
+        return lime;
+      case 'Menunggu':
+        return const Color(0xFFFFEAC5);
+      case 'Terjadwal':
+        return SkrivaDashColors.softBlue;
+      case 'Selesai':
+        return const Color(0xFFE7EAF0);
+      default:
+        return const Color(0xFFF0F2F5);
+    }
+  }
+
+  Widget badgeStatus(String status) {
+    return Container(
+      padding: const EdgeInsets.symmetric(
+        horizontal: 11,
+        vertical: 7,
+      ),
+      decoration: BoxDecoration(
+        color: backgroundStatus(status),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Text(
+        status,
+        style: TextStyle(
+          color: warnaStatus(status),
+          fontSize: 11,
+          fontWeight: FontWeight.w800,
+        ),
+      ),
+    );
+  }
+
+  Widget tombol(
+    String label,
+    IconData icon,
+    VoidCallback action, {
+    bool outlined = false,
+  }) {
+    return SizedBox(
+      width: double.infinity,
+      child: outlined
+          ? OutlinedButton.icon(
+              onPressed: proses ? null : action,
+              icon: Icon(icon),
+              label: Text(label),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: blue,
+                padding: const EdgeInsets.symmetric(
+                  vertical: 13,
+                ),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(15),
+                ),
+              ),
+            )
+          : FilledButton.icon(
+              onPressed: proses ? null : action,
+              icon: Icon(icon),
+              label: Text(label),
+              style: FilledButton.styleFrom(
+                backgroundColor: blue,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(
+                  vertical: 13,
+                ),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(15),
+                ),
+              ),
+            ),
+    );
+  }
+
+  // =====================================================
+  // KARTU JADWAL
+  // =====================================================
 
   Widget kartuJadwal(Map<String, Object?> data) {
     final id = data['id'] as int;
@@ -298,220 +448,284 @@ class _JadwalBimbinganBaruPageState
     final mahasiswaNama =
         data['nama_mahasiswa']?.toString() ?? '';
 
-    final tanggalParsed = DateTime.tryParse(tanggal);
-    final sudahLewat = tanggalParsed != null &&
-        tanggalParsed.isBefore(DateTime(
-          DateTime.now().year,
-          DateTime.now().month,
-          DateTime.now().day,
-        ));
+    final parsed = DateTime.tryParse(tanggal);
+    final sekarang = DateTime.now();
+    final hariIni = DateTime(
+      sekarang.year,
+      sekarang.month,
+      sekarang.day,
+    );
+
+    final sudahLewat =
+        parsed != null && parsed.isBefore(hariIni);
 
     final bisaBooking =
         !dosen && status == 'Tersedia' && !sudahLewat;
 
-    return Container(
-      margin: const EdgeInsets.only(bottom: 13),
-      padding: const EdgeInsets.all(17),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              const Icon(Icons.calendar_month, color: blue),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  tanggal,
-                  style: const TextStyle(
-                    color: olive,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 15,
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 13),
+      child: SkrivaGlassCard(
+        tint: SkrivaDashColors.softBlue,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  width: 44,
+                  height: 44,
+                  decoration: BoxDecoration(
+                    color: lime,
+                    borderRadius: BorderRadius.circular(14),
                   ),
+                  child: const Icon(
+                    Icons.event_available_rounded,
+                    color: dark,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    tanggal,
+                    style: const TextStyle(
+                      color: dark,
+                      fontWeight: FontWeight.w800,
+                      fontSize: 15,
+                    ),
+                  ),
+                ),
+                badgeStatus(status),
+              ],
+            ),
+
+            const SizedBox(height: 17),
+
+            Text(
+              '$jam WIB',
+              style: const TextStyle(
+                color: blue,
+                fontWeight: FontWeight.w800,
+                fontSize: 22,
+              ),
+            ),
+
+            const SizedBox(height: 8),
+
+            Row(
+              children: [
+                const Icon(
+                  Icons.video_camera_front_outlined,
+                  size: 17,
+                  color: SkrivaDashColors.muted,
+                ),
+                const SizedBox(width: 7),
+                Text(
+                  mode,
+                  style: const TextStyle(
+                    color: SkrivaDashColors.muted,
+                    fontSize: 12,
+                  ),
+                ),
+              ],
+            ),
+
+            const SizedBox(height: 11),
+
+            if (!dosen) ...[
+              Text(
+                'Dosen: $dosenNama',
+                style: const TextStyle(
+                  color: dark,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
                 ),
               ),
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 11,
-                  vertical: 6,
-                ),
-                decoration: BoxDecoration(
-                  color: warnaStatus(status).withOpacity(0.12),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Text(
-                  status,
-                  style: TextStyle(
-                    color: warnaStatus(status),
-                    fontSize: 11,
-                    fontWeight: FontWeight.bold,
-                  ),
+              const SizedBox(height: 4),
+              Text(
+                'Pembimbing ${data['pembimbing_ke']}',
+                style: const TextStyle(
+                  color: blue,
+                  fontSize: 11,
                 ),
               ),
             ],
-          ),
-          const SizedBox(height: 12),
-          Text(
-            '$jam WIB',
-            style: const TextStyle(
-              fontWeight: FontWeight.bold,
-              fontSize: 17,
-            ),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            'Mode: $mode',
-            style: const TextStyle(color: Colors.grey),
-          ),
-          const SizedBox(height: 6),
-          if (!dosen) ...[
-            Text('Dosen: $dosenNama'),
-            Text(
-              'Pembimbing ${data['pembimbing_ke']}',
-              style: const TextStyle(
-                color: olive,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-          ],
-          if (dosen && mahasiswaNama.isNotEmpty) ...[
-            Text('Mahasiswa: $mahasiswaNama'),
-            Text('NIM: ${data['nim'] ?? '-'}'),
-          ],
-          const SizedBox(height: 14),
-          if (bisaBooking)
-            tombol(
-              'Booking Jadwal',
-              Icons.add_circle_outline,
-              () => booking(id),
-            ),
-          if (dosen && status == 'Menunggu')
-            tombol(
-              'Konfirmasi Booking',
-              Icons.check_circle_outline,
-              () => ubahStatus(id, 'Terjadwal'),
-            ),
-          if (dosen && status == 'Terjadwal')
-            tombol(
-              'Tandai Selesai',
-              Icons.task_alt,
-              () => ubahStatus(id, 'Selesai'),
-            ),
-          if (dosen && status == 'Tersedia')
-            Align(
-              alignment: Alignment.centerRight,
-              child: TextButton.icon(
-                onPressed: proses ? null : () => hapusSlot(id),
-                icon: const Icon(Icons.delete_outline),
-                label: const Text('Hapus Slot'),
-              ),
-            ),
-        ],
-      ),
-    );
-  }
 
-  Widget tombol(
-    String label,
-    IconData icon,
-    VoidCallback action,
-  ) {
-    return SizedBox(
-      width: double.infinity,
-      child: ElevatedButton.icon(
-        onPressed: proses ? null : action,
-        icon: Icon(icon),
-        label: Text(label),
-        style: ElevatedButton.styleFrom(
-          backgroundColor: olive,
-          foregroundColor: Colors.white,
-          padding: const EdgeInsets.symmetric(vertical: 13),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(14),
-          ),
+            if (dosen && mahasiswaNama.isNotEmpty) ...[
+              Text(
+                'Mahasiswa: $mahasiswaNama',
+                style: const TextStyle(
+                  color: dark,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                'NIM: ${data['nim'] ?? '-'}',
+                style: const TextStyle(
+                  color: SkrivaDashColors.muted,
+                  fontSize: 11,
+                ),
+              ),
+            ],
+
+            if (bisaBooking ||
+                (dosen && status != 'Selesai')) ...[
+              const SizedBox(height: 16),
+              const Divider(color: Color(0xFFE4EAF1)),
+              const SizedBox(height: 8),
+            ],
+
+            if (bisaBooking)
+              tombol(
+                'Booking Jadwal',
+                Icons.add_circle_outline_rounded,
+                () => booking(id),
+              ),
+
+            if (dosen && status == 'Menunggu')
+              tombol(
+                'Konfirmasi Booking',
+                Icons.check_circle_outline_rounded,
+                () => ubahStatus(id, 'Terjadwal'),
+              ),
+
+            if (dosen && status == 'Terjadwal')
+              tombol(
+                'Tandai Selesai',
+                Icons.task_alt_rounded,
+                () => ubahStatus(id, 'Selesai'),
+              ),
+
+            if (dosen && status == 'Tersedia')
+              tombol(
+                'Hapus Slot',
+                Icons.delete_outline_rounded,
+                () => hapusSlot(id),
+                outlined: true,
+              ),
+          ],
         ),
       ),
     );
   }
+
+  // =====================================================
+  // MAIN PAGE
+  // =====================================================
 
   @override
   Widget build(BuildContext context) {
-    return AnimatedPage(
-      child: Scaffold(
-        backgroundColor: const Color(0xFFFFF0DE),
-        appBar: AppBar(
-          title: Text(
-            dosen ? 'Kelola Jadwal Dosen' : 'Jadwal Bimbingan',
+    return Scaffold(
+      backgroundColor: SkrivaDashColors.background,
+      appBar: AppBar(
+        backgroundColor: SkrivaDashColors.background,
+        surfaceTintColor: Colors.transparent,
+        foregroundColor: dark,
+        title: Text(
+          dosen ? 'Kelola Jadwal' : 'Jadwal Bimbingan',
+          style: const TextStyle(
+            fontWeight: FontWeight.w800,
           ),
-          backgroundColor: const Color(0xFFFFF0DE),
-          actions: [
-            IconButton(
-              onPressed: muat,
-              icon: const Icon(Icons.refresh),
-            ),
-          ],
         ),
-        floatingActionButton: !loading && dosen
-            ? FloatingActionButton.extended(
-                backgroundColor: olive,
-                foregroundColor: Colors.white,
-                onPressed: proses ? null : buatJadwal,
-                icon: const Icon(Icons.add),
-                label: const Text('Buat Slot'),
-              )
-            : null,
-        body: Container(
-          decoration: const BoxDecoration(
-            gradient: LinearGradient(
-              colors: [
-                Color(0xFFFFF0DE),
-                Color(0xFFEAF3F2),
-              ],
-              begin: Alignment.topCenter,
-              end: Alignment.bottomCenter,
+        actions: [
+          IconButton(
+            onPressed: muat,
+            icon: const Icon(Icons.refresh_rounded),
+          ),
+        ],
+      ),
+      floatingActionButton: !loading && dosen
+          ? FloatingActionButton.extended(
+              onPressed: proses ? null : buatJadwal,
+              backgroundColor: blue,
+              foregroundColor: Colors.white,
+              icon: const Icon(Icons.add_rounded),
+              label: const Text('Buat Slot'),
+            )
+          : null,
+      body: Stack(
+        children: [
+          const Positioned.fill(
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [
+                    Color(0xFFF6F8FB),
+                    Color(0xFFEDF8F8),
+                    Color(0xFFF8F5FF),
+                  ],
+                ),
+              ),
             ),
           ),
-          child: loading
-              ? const Center(
-                  child: CircularProgressIndicator(color: olive),
-                )
-              : RefreshIndicator(
-                  onRefresh: muat,
-                  child: ListView(
-                    padding: const EdgeInsets.fromLTRB(18, 16, 18, 100),
-                    children: [
-                      Text(
-                        dosen
-                            ? 'Atur ketersediaan dan konfirmasi bimbingan.'
-                            : 'Pilih jadwal dari dua dosen pembimbingmu.',
-                        style: const TextStyle(
-                          color: olive,
-                          fontSize: 13,
-                        ),
-                      ),
-                      const SizedBox(height: 18),
-                      if (items.isEmpty)
-                        Container(
-                          padding: const EdgeInsets.all(25),
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.circular(18),
+          if (loading)
+            const Center(
+              child: CircularProgressIndicator(
+                color: blue,
+              ),
+            )
+          else
+            RefreshIndicator(
+              color: blue,
+              onRefresh: muat,
+              child: ListView(
+                padding: const EdgeInsets.fromLTRB(
+                  18,
+                  16,
+                  18,
+                  110,
+                ),
+                children: [
+                  SkrivaDashboardHero(
+                    eyebrow: dosen
+                        ? 'LECTURER / SCHEDULE'
+                        : 'STUDENT / SCHEDULE',
+                    title: dosen
+                        ? 'Plan.\nGuide. Meet.'
+                        : 'Book Your\nNext Session.',
+                    subtitle: dosen
+                        ? 'Kelola slot dan persetujuan bimbingan.'
+                        : 'Temukan slot dari dosen pembimbingmu.',
+                    icon: Icons.calendar_month_rounded,
+                  ),
+                  const SizedBox(height: 24),
+                  SkrivaSectionTitle(
+                    title: dosen
+                        ? 'Jadwal Dosen'
+                        : 'Jadwal Tersedia',
+                    subtitle:
+                        '${items.length} slot tercatat',
+                  ),
+                  const SizedBox(height: 15),
+                  if (items.isEmpty)
+                    SkrivaGlassCard(
+                      tint: SkrivaDashColors.lime,
+                      child: Column(
+                        children: [
+                          const Icon(
+                            Icons.event_busy_rounded,
+                            color: blue,
+                            size: 40,
                           ),
-                          child: Text(
+                          const SizedBox(height: 12),
+                          Text(
                             dosen
                                 ? 'Belum ada slot. Tekan Buat Slot.'
                                 : 'Belum ada jadwal dari dosen pembimbingmu.',
                             textAlign: TextAlign.center,
+                            style: const TextStyle(color: dark),
                           ),
-                        ),
-                      ...items.map(kartuJadwal),
-                    ],
-                  ),
-                ),
-        ),
+                        ],
+                      ),
+                    ),
+                  ...items.map(kartuJadwal),
+                ],
+              ),
+            ),
+        ],
       ),
     );
   }

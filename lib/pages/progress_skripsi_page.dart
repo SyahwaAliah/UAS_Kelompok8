@@ -1,202 +1,372 @@
+
 import 'package:flutter/material.dart';
-import 'package:test/theme/jadwal_theme.dart';
+
 import 'package:test/database/progress_akun_service.dart';
 import 'package:test/models/checklist_model.dart';
+import 'package:test/widgets/skriva_dashboard_ui.dart';
 
-import 'checklist_page.dart';
+import 'package:test/pages/checklist_page.dart';
 
 class ProgressSkripsiPage extends StatefulWidget {
   const ProgressSkripsiPage({super.key});
 
   @override
-  State<ProgressSkripsiPage> createState() => _ProgressSkripsiPageState();
+  State<ProgressSkripsiPage> createState() =>
+      _ProgressSkripsiPageState();
 }
 
-class _ProgressSkripsiPageState extends State<ProgressSkripsiPage> {
-  static const olive = Color(0xFF694A47);
-  static const darkOlive = Color(0xFF523B39);
-  static const blue = Color(0xFF96C1C5);
+class _ProgressSkripsiPageState
+    extends State<ProgressSkripsiPage> {
+  static const blue = SkrivaDashColors.blue;
+  static const dark = SkrivaDashColors.dark;
+  static const lime = SkrivaDashColors.lime;
 
-  final _repo = ProgressAkunService.instance;
+  final service = ProgressAkunService.instance;
 
-  List<ChecklistModel> _tahapan = [];
-  bool _loading = true;
+  List<ChecklistModel> tahapan = [];
+
+  bool loading = true;
+
+  int get jumlahSelesai =>
+      tahapan.where((item) => item.selesai).length;
+
+  int get persen => tahapan.isEmpty
+      ? 0
+      : ((jumlahSelesai / tahapan.length) * 100).round();
 
   @override
   void initState() {
     super.initState();
-    _muatProgress();
+    muatProgress();
   }
 
-  Future<void> _muatProgress() async {
+  // =====================================================
+  // LOAD PROGRESS PER AKUN
+  // =====================================================
+
+  Future<void> muatProgress() async {
     try {
-      final hasil = await _repo.semua();
+      final hasil = await service.semua();
 
       if (!mounted) return;
 
       setState(() {
-        _tahapan = hasil;
-        _loading = false;
+        tahapan = hasil;
+        loading = false;
       });
     } catch (e) {
       if (!mounted) return;
 
-      setState(() => _loading = false);
+      setState(() => loading = false);
 
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text('Gagal memuat progress: $e')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Gagal memuat progress: $e'),
+        ),
+      );
     }
   }
 
-  int get _selesai => _tahapan.where((item) => item.selesai).length;
+  // =====================================================
+  // NAVIGATION
+  // =====================================================
 
-  int get _persen =>
-      _tahapan.isEmpty ? 0 : ((_selesai / _tahapan.length) * 100).round();
-
-  Future<void> _kelolaChecklist() async {
+  Future<void> bukaChecklist() async {
     await Navigator.push(
       context,
-      MaterialPageRoute(builder: (_) => const ChecklistPage()),
+      MaterialPageRoute(
+        builder: (_) => const ChecklistPage(),
+      ),
     );
 
-    if (mounted) await _muatProgress();
+    if (mounted) {
+      await muatProgress();
+    }
   }
+
+  // =====================================================
+  // TIMELINE ITEM
+  // =====================================================
+
+  Widget kartuTahapan(
+    ChecklistModel item,
+    int index,
+  ) {
+    final selesai = item.selesai;
+
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Column(
+          children: [
+            Container(
+              width: 38,
+              height: 38,
+              decoration: BoxDecoration(
+                color: selesai
+                    ? lime
+                    : SkrivaDashColors.softBlue,
+                borderRadius: BorderRadius.circular(13),
+                border: Border.all(
+                  color: Colors.white,
+                  width: 2,
+                ),
+              ),
+              child: Icon(
+                selesai
+                    ? Icons.check_rounded
+                    : Icons.circle_outlined,
+                color: selesai ? dark : blue,
+                size: 21,
+              ),
+            ),
+
+            if (index < tahapan.length - 1)
+              Container(
+                width: 2,
+                height: 63,
+                color: selesai
+                    ? lime
+                    : const Color(0xFFDDE6EF),
+              ),
+          ],
+        ),
+
+        const SizedBox(width: 12),
+
+        Expanded(
+          child: Padding(
+            padding: const EdgeInsets.only(bottom: 13),
+            child: SkrivaGlassCard(
+              tint: selesai
+                  ? lime
+                  : SkrivaDashColors.white,
+              padding: const EdgeInsets.all(14),
+              radius: 18,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'STEP ${index + 1}',
+                    style: const TextStyle(
+                      color: blue,
+                      fontSize: 10,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: 1,
+                    ),
+                  ),
+
+                  const SizedBox(height: 5),
+
+                  Text(
+                    item.kegiatan,
+                    style: const TextStyle(
+                      color: dark,
+                      fontWeight: FontWeight.w800,
+                      fontSize: 14,
+                    ),
+                  ),
+
+                  const SizedBox(height: 6),
+
+                  Text(
+                    selesai
+                        ? 'Milestone completed'
+                        : 'Waiting to be completed',
+                    style: const TextStyle(
+                      color: SkrivaDashColors.muted,
+                      fontSize: 11,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  // =====================================================
+  // MAIN PROGRESS PAGE
+  // =====================================================
 
   @override
   Widget build(BuildContext context) {
-    return AnimatedPage(
-      child: Scaffold(
-        appBar: AppBar(
-          title: const Text('Progress Skripsi'),
-          backgroundColor: olive,
-          foregroundColor: Colors.white,
-        ),
-        body: Container(
-          width: double.infinity,
-          height: double.infinity,
-          decoration: const BoxDecoration(
-            gradient: LinearGradient(
-              colors: [Color(0xFFFFF0DE), Color(0xFFE5F0EF)],
-              begin: Alignment.topCenter,
-              end: Alignment.bottomCenter,
-            ),
+    return Scaffold(
+      backgroundColor: SkrivaDashColors.background,
+      appBar: AppBar(
+        backgroundColor: SkrivaDashColors.background,
+        foregroundColor: dark,
+        surfaceTintColor: Colors.transparent,
+        title: const Text(
+          'Progress Skripsi',
+          style: TextStyle(
+            fontWeight: FontWeight.w800,
           ),
-          child: _loading
-              ? const Center(child: CircularProgressIndicator(color: olive))
-              : ListView(
-                  padding: const EdgeInsets.all(20),
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(22),
-                      decoration: BoxDecoration(
-                        color: olive,
-                        borderRadius: BorderRadius.circular(25),
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text(
-                            'Total Progress Skripsi',
-                            style: TextStyle(color: Colors.white70),
+        ),
+      ),
+      body: loading
+          ? const Center(
+              child: CircularProgressIndicator(
+                color: blue,
+              ),
+            )
+          : RefreshIndicator(
+              color: blue,
+              onRefresh: muatProgress,
+              child: ListView(
+                padding: const EdgeInsets.fromLTRB(
+                  20,
+                  18,
+                  20,
+                  35,
+                ),
+                children: [
+                  const SkrivaDashboardHero(
+                    eyebrow: 'STUDENT / THESIS PROGRESS',
+                    title: 'Every Step\nMatters.',
+                    subtitle:
+                        'See how far you have come and what comes next.',
+                    icon: Icons.insights_rounded,
+                  ),
+
+                  const SizedBox(height: 20),
+
+                  SkrivaGlassCard(
+                    tint: SkrivaDashColors.softBlue,
+                    padding: const EdgeInsets.all(20),
+                    child: Column(
+                      crossAxisAlignment:
+                          CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'THESIS COMPLETION',
+                          style: TextStyle(
+                            color: blue,
+                            fontWeight: FontWeight.w800,
+                            fontSize: 11,
+                            letterSpacing: 1,
                           ),
-                          const SizedBox(height: 10),
-                          Text(
-                            '$_persen%',
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 36,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                          const SizedBox(height: 14),
-                          ClipRRect(
-                            borderRadius: BorderRadius.circular(10),
-                            child: LinearProgressIndicator(
-                              value: _persen / 100,
-                              minHeight: 9,
-                              backgroundColor: Colors.white30,
-                              color: blue,
-                            ),
-                          ),
-                          const SizedBox(height: 10),
-                          Text(
-                            '$_selesai dari '
-                            '${_tahapan.length} tahap selesai',
-                            style: const TextStyle(
-                              color: Colors.white70,
-                              fontSize: 12,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 22),
-                    const Text(
-                      'Tahapan Skripsi',
-                      style: TextStyle(
-                        color: darkOlive,
-                        fontSize: 19,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    if (_tahapan.isEmpty)
-                      const Text('Belum ada tahapan skripsi.'),
-                    ..._tahapan.map(
-                      (item) => Container(
-                        margin: const EdgeInsets.only(bottom: 10),
-                        padding: const EdgeInsets.all(15),
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(18),
                         ),
-                        child: Row(
+
+                        const SizedBox(height: 18),
+
+                        Row(
                           children: [
-                            Icon(
-                              item.selesai
-                                  ? Icons.check_circle
-                                  : Icons.circle_outlined,
-                              color: item.selesai ? olive : blue,
-                            ),
-                            const SizedBox(width: 12),
                             Expanded(
-                              child: Text(
-                                item.kegiatan,
-                                style: TextStyle(
-                                  color: darkOlive,
-                                  fontWeight: FontWeight.w600,
-                                  decoration: item.selesai
-                                      ? TextDecoration.lineThrough
-                                      : null,
-                                ),
+                              child: Column(
+                                crossAxisAlignment:
+                                    CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    '$persen%',
+                                    style: const TextStyle(
+                                      color: dark,
+                                      fontSize: 38,
+                                      fontWeight: FontWeight.w800,
+                                    ),
+                                  ),
+
+                                  const SizedBox(height: 5),
+
+                                  Text(
+                                    '$jumlahSelesai dari ${tahapan.length} tahap',
+                                    style: const TextStyle(
+                                      color: SkrivaDashColors.muted,
+                                      fontSize: 12,
+                                    ),
+                                  ),
+
+                                  const SizedBox(height: 13),
+
+                                  const Text(
+                                    'Keep going, you got this!',
+                                    style: TextStyle(
+                                      color: blue,
+                                      fontWeight: FontWeight.w700,
+                                      fontSize: 11,
+                                    ),
+                                  ),
+                                ],
                               ),
                             ),
-                            Text(
-                              item.selesai ? 'Selesai' : 'Belum',
-                              style: const TextStyle(
-                                color: Colors.grey,
-                                fontSize: 12,
-                              ),
+
+                            SkrivaProgressDiagram(
+                              percent: persen,
+                              completed: jumlahSelesai,
+                              total: tahapan.length,
                             ),
                           ],
                         ),
+
+                        const SizedBox(height: 20),
+
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(12),
+                          child: LinearProgressIndicator(
+                            value: persen / 100,
+                            minHeight: 9,
+                            backgroundColor:
+                                const Color(0xFFDCE8F0),
+                            color: blue,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  const SizedBox(height: 26),
+
+                  const SkrivaSectionTitle(
+                    title: 'Your Timeline',
+                    subtitle:
+                        'Perjalanan tahapan skripsimu.',
+                  ),
+
+                  const SizedBox(height: 15),
+
+                  if (tahapan.isEmpty)
+                    const SkrivaGlassCard(
+                      tint: lime,
+                      child: Text(
+                        'Belum ada tahapan skripsi.',
                       ),
                     ),
-                    const SizedBox(height: 15),
-                    ElevatedButton.icon(
-                      onPressed: _kelolaChecklist,
-                      icon: const Icon(Icons.checklist),
-                      label: const Text('Kelola Checklist Skripsi'),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: olive,
+
+                  ...List.generate(
+                    tahapan.length,
+                    (index) => kartuTahapan(
+                      tahapan[index],
+                      index,
+                    ),
+                  ),
+
+                  const SizedBox(height: 15),
+
+                  SizedBox(
+                    width: double.infinity,
+                    child: FilledButton.icon(
+                      onPressed: bukaChecklist,
+                      style: FilledButton.styleFrom(
+                        backgroundColor: blue,
                         foregroundColor: Colors.white,
-                        padding: const EdgeInsets.all(15),
+                        padding: const EdgeInsets.all(16),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(17),
+                        ),
+                      ),
+                      icon: const Icon(
+                        Icons.checklist_rounded,
+                      ),
+                      label: const Text(
+                        'Kelola Checklist Skripsi',
                       ),
                     ),
-                  ],
-                ),
-        ),
-      ),
+                  ),
+                ],
+              ),
+            ),
     );
   }
 }

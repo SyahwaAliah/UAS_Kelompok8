@@ -1,23 +1,36 @@
+
 import 'package:flutter/material.dart';
-import 'package:test/theme/jadwal_theme.dart';
-import 'package:test/models/checklist_model.dart';
+
 import 'package:test/database/progress_akun_service.dart';
+import 'package:test/models/checklist_model.dart';
+import 'package:test/widgets/skriva_dashboard_ui.dart';
 
 class ChecklistPage extends StatefulWidget {
   const ChecklistPage({super.key});
 
   @override
-  State<ChecklistPage> createState() => _ChecklistPageState();
+  State<ChecklistPage> createState() =>
+      _ChecklistPageState();
 }
 
 class _ChecklistPageState extends State<ChecklistPage> {
-  static const primary = Color(0xFF694A47);
-  static const darkPrimary = Color(0xFF523B39);
+  static const blue = SkrivaDashColors.blue;
+  static const dark = SkrivaDashColors.dark;
+  static const lime = SkrivaDashColors.lime;
 
   final service = ProgressAkunService.instance;
 
   List<ChecklistModel> items = [];
+
   bool loading = true;
+  bool proses = false;
+
+  int get jumlahSelesai =>
+      items.where((item) => item.selesai).length;
+
+  int get persen => items.isEmpty
+      ? 0
+      : ((jumlahSelesai / items.length) * 100).round();
 
   @override
   void initState() {
@@ -25,19 +38,25 @@ class _ChecklistPageState extends State<ChecklistPage> {
     muat();
   }
 
+  // =====================================================
+  // LOAD DATA
+  // =====================================================
+
   Future<void> muat() async {
     try {
-      final rows = await service.semua();
+      final hasil = await service.semua();
+
       if (!mounted) return;
 
       setState(() {
-        items = rows;
+        items = hasil;
         loading = false;
       });
     } catch (e) {
       if (!mounted) return;
+
       setState(() => loading = false);
-      pesan('$e');
+      pesan('Gagal memuat checklist: $e');
     }
   }
 
@@ -45,34 +64,124 @@ class _ChecklistPageState extends State<ChecklistPage> {
     if (!mounted) return;
 
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(isi)),
+      SnackBar(
+        content: Text(isi),
+        behavior: SnackBarBehavior.floating,
+        backgroundColor: blue,
+      ),
     );
   }
 
-  Future<void> toggle(ChecklistModel item) async {
+  Future<void> aksi(
+    Future<void> Function() callback,
+  ) async {
+    if (proses) return;
+
+    setState(() => proses = true);
+
     try {
-      await service.ubahStatus(
-        item.id!,
-        !item.selesai,
-      );
+      await callback();
       await muat();
     } catch (e) {
-      pesan('Gagal memperbarui: $e');
+      pesan('$e');
+    } finally {
+      if (mounted) {
+        setState(() => proses = false);
+      }
     }
   }
 
-  Future<void> tambah() async {
+  // =====================================================
+  // TOGGLE STATUS
+  // =====================================================
+
+  Future<void> ubahStatus(ChecklistModel item) async {
+    if (item.id == null) return;
+
+    await aksi(() {
+      return service.ubahStatus(
+        item.id!,
+        !item.selesai,
+      );
+    });
+  }
+
+  // =====================================================
+  // TAMBAH TAHAPAN
+  // =====================================================
+
+  Future<void> tambahTahapan() async {
     final controller = TextEditingController();
 
-    final simpan = await showDialog<bool>(
+    final hasil = await showDialog<String>(
+      context: context,
+      builder: (ctx) {
+        return AlertDialog(
+          backgroundColor: SkrivaDashColors.background,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(25),
+          ),
+          title: const Text(
+            'Tambah Tahapan',
+            style: TextStyle(
+              color: dark,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          content: TextField(
+            controller: controller,
+            autofocus: true,
+            textCapitalization: TextCapitalization.sentences,
+            decoration: InputDecoration(
+              hintText: 'Contoh: Bab 4',
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(15),
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Batal'),
+            ),
+            FilledButton(
+              style: FilledButton.styleFrom(
+                backgroundColor: blue,
+              ),
+              onPressed: () {
+                Navigator.pop(
+                  ctx,
+                  controller.text.trim(),
+                );
+              },
+              child: const Text('Tambah'),
+            ),
+          ],
+        );
+      },
+    );
+
+    controller.dispose();
+
+    if (hasil == null || hasil.isEmpty) return;
+
+    await aksi(() => service.tambah(hasil));
+  }
+
+  // =====================================================
+  // HAPUS TAHAPAN
+  // =====================================================
+
+  Future<void> hapusTahapan(ChecklistModel item) async {
+    if (item.id == null) return;
+
+    final setuju = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Tambah Tahap Skripsi'),
-        content: TextField(
-          controller: controller,
-          decoration: const InputDecoration(
-            hintText: 'Contoh: Bab 4',
-          ),
+        backgroundColor: SkrivaDashColors.background,
+        title: const Text('Hapus Tahapan?'),
+        content: Text(
+          'Tahapan "${item.kegiatan}" akan dihapus.',
         ),
         actions: [
           TextButton(
@@ -80,38 +189,9 @@ class _ChecklistPageState extends State<ChecklistPage> {
             child: const Text('Batal'),
           ),
           FilledButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Tambah'),
-          ),
-        ],
-      ),
-    );
-
-    final judul = controller.text.trim();
-    controller.dispose();
-
-    if (simpan != true) return;
-
-    try {
-      await service.tambah(judul);
-      await muat();
-    } catch (e) {
-      pesan('Gagal menambah: $e');
-    }
-  }
-
-  Future<void> hapus(ChecklistModel item) async {
-    final setuju = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Hapus Tahap?'),
-        content: Text(item.kegiatan),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Batal'),
-          ),
-          FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: blue,
+            ),
             onPressed: () => Navigator.pop(ctx, true),
             child: const Text('Hapus'),
           ),
@@ -121,58 +201,97 @@ class _ChecklistPageState extends State<ChecklistPage> {
 
     if (setuju != true) return;
 
-    try {
-      await service.hapus(item.id!);
-      await muat();
-    } catch (e) {
-      pesan('Gagal menghapus: $e');
-    }
+    await aksi(() => service.hapus(item.id!));
   }
 
-  Widget kartu(ChecklistModel item) {
-    return InkWell(
-      onTap: () => toggle(item),
-      onLongPress: () => hapus(item),
-      borderRadius: BorderRadius.circular(18),
-      child: Container(
-        margin: const EdgeInsets.only(bottom: 10),
-        padding: const EdgeInsets.symmetric(
-          horizontal: 16,
-          vertical: 15,
-        ),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(18),
-        ),
+  // =====================================================
+  // ITEM CHECKLIST
+  // =====================================================
+
+  Widget kartuTahapan(
+    ChecklistModel item,
+    int index,
+  ) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 11),
+      child: SkrivaGlassCard(
+        tint: item.selesai
+            ? lime
+            : SkrivaDashColors.softBlue,
+        padding: const EdgeInsets.all(13),
         child: Row(
           children: [
-            Icon(
-              item.selesai
-                  ? Icons.check_box_rounded
-                  : Icons.check_box_outline_blank_rounded,
-              color: item.selesai
-                  ? primary
-                  : Colors.grey,
-            ),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Text(
-                item.kegiatan,
-                style: TextStyle(
-                  color: darkPrimary,
-                  fontWeight: FontWeight.w600,
-                  decoration: item.selesai
-                      ? TextDecoration.lineThrough
-                      : null,
+            InkWell(
+              onTap: proses ? null : () => ubahStatus(item),
+              borderRadius: BorderRadius.circular(13),
+              child: Container(
+                width: 43,
+                height: 43,
+                decoration: BoxDecoration(
+                  color: item.selesai
+                      ? lime
+                      : const Color(0xFFE8EFF7),
+                  borderRadius: BorderRadius.circular(13),
+                ),
+                child: Icon(
+                  item.selesai
+                      ? Icons.check_rounded
+                      : Icons.circle_outlined,
+                  color: item.selesai ? dark : blue,
                 ),
               ),
             ),
+
+            const SizedBox(width: 12),
+
+            Expanded(
+              child: InkWell(
+                onTap: proses ? null : () => ubahStatus(item),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'MILESTONE ${index + 1}',
+                      style: const TextStyle(
+                        color: blue,
+                        fontSize: 10,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: 1,
+                      ),
+                    ),
+                    const SizedBox(height: 5),
+                    Text(
+                      item.kegiatan,
+                      style: TextStyle(
+                        color: dark,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w800,
+                        decoration: item.selesai
+                            ? TextDecoration.lineThrough
+                            : null,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      item.selesai ? 'Selesai' : 'Belum selesai',
+                      style: const TextStyle(
+                        color: SkrivaDashColors.muted,
+                        fontSize: 11,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+
             IconButton(
-              tooltip: 'Hapus tahap',
-              onPressed: () => hapus(item),
+              tooltip: 'Hapus Tahapan',
+              onPressed: proses
+                  ? null
+                  : () => hapusTahapan(item),
               icon: const Icon(
-                Icons.delete_outline,
-                color: primary,
+                Icons.delete_outline_rounded,
+                color: SkrivaDashColors.muted,
               ),
             ),
           ],
@@ -181,99 +300,143 @@ class _ChecklistPageState extends State<ChecklistPage> {
     );
   }
 
+  // =====================================================
+  // MAIN PAGE
+  // =====================================================
+
   @override
   Widget build(BuildContext context) {
-    final jumlahSelesai =
-        items.where((item) => item.selesai).length;
-
-    final persen = items.isEmpty
-        ? 0
-        : (jumlahSelesai / items.length * 100).round();
-
-    return AnimatedPage(
-      child: Scaffold(
-        backgroundColor: const Color(0xFFFFF0DE),
-        appBar: AppBar(
-          title: const Text('Progress Skripsi'),
-          actions: [
-            IconButton(
-              onPressed: muat,
-              icon: const Icon(Icons.refresh),
-            ),
-          ],
+    return Scaffold(
+      backgroundColor: SkrivaDashColors.background,
+      appBar: AppBar(
+        backgroundColor: SkrivaDashColors.background,
+        foregroundColor: dark,
+        surfaceTintColor: Colors.transparent,
+        title: const Text(
+          'Checklist Skripsi',
+          style: TextStyle(
+            fontWeight: FontWeight.w800,
+          ),
         ),
-        floatingActionButton: FloatingActionButton(
-          backgroundColor: primary,
-          foregroundColor: Colors.white,
-          onPressed: tambah,
-          child: const Icon(Icons.add),
-        ),
-        body: loading
-            ? const Center(
-                child: CircularProgressIndicator(
-                  color: primary,
+        actions: [
+          IconButton(
+            onPressed: muat,
+            icon: const Icon(Icons.refresh_rounded),
+          ),
+        ],
+      ),
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: proses ? null : tambahTahapan,
+        backgroundColor: blue,
+        foregroundColor: Colors.white,
+        icon: const Icon(Icons.add_rounded),
+        label: const Text('Tambah Tahap'),
+      ),
+      body: loading
+          ? const Center(
+              child: CircularProgressIndicator(color: blue),
+            )
+          : RefreshIndicator(
+              color: blue,
+              onRefresh: muat,
+              child: ListView(
+                padding: const EdgeInsets.fromLTRB(
+                  20,
+                  18,
+                  20,
+                  105,
                 ),
-              )
-            : RefreshIndicator(
-                onRefresh: muat,
-                child: ListView(
-                  padding: const EdgeInsets.fromLTRB(
-                    18, 18, 18, 95,
+                children: [
+                  const SkrivaDashboardHero(
+                    eyebrow: 'STUDENT / MILESTONES',
+                    title: 'Small Steps.\nBig Progress.',
+                    subtitle:
+                        'Track every milestone on your thesis journey.',
+                    icon: Icons.checklist_rounded,
                   ),
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(20),
-                      decoration: BoxDecoration(
-                        color: primary,
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      child: Column(
-                        crossAxisAlignment:
-                            CrossAxisAlignment.start,
-                        children: [
-                          const Text(
-                            'Progress Skripsi Kamu',
-                            style: TextStyle(
-                              color: Colors.white70,
-                            ),
+
+                  const SizedBox(height: 20),
+
+                  SkrivaGlassCard(
+                    tint: SkrivaDashColors.softBlue,
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment:
+                                CrossAxisAlignment.start,
+                            children: [
+                              const Text(
+                                'YOUR PROGRESS',
+                                style: TextStyle(
+                                  color: blue,
+                                  fontWeight: FontWeight.w800,
+                                  fontSize: 10,
+                                  letterSpacing: 1,
+                                ),
+                              ),
+
+                              const SizedBox(height: 12),
+
+                              Text(
+                                '$jumlahSelesai / ${items.length}',
+                                style: const TextStyle(
+                                  color: dark,
+                                  fontSize: 28,
+                                  fontWeight: FontWeight.w800,
+                                ),
+                              ),
+
+                              const SizedBox(height: 5),
+
+                              const Text(
+                                'Tahapan selesai',
+                                style: TextStyle(
+                                  color: SkrivaDashColors.muted,
+                                  fontSize: 11,
+                                ),
+                              ),
+                            ],
                           ),
-                          const SizedBox(height: 8),
-                          Text(
-                            '$persen%',
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 30,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                          const SizedBox(height: 8),
-                          LinearProgressIndicator(
-                            value: persen / 100,
-                            backgroundColor: Colors.white30,
-                            color: const Color(0xFF96C1C5),
-                          ),
-                          const SizedBox(height: 8),
-                          Text(
-                            '$jumlahSelesai dari '
-                            '${items.length} tahapan selesai',
-                            style: const TextStyle(
-                              color: Colors.white70,
-                            ),
-                          ),
-                        ],
+                        ),
+
+                        SkrivaProgressDiagram(
+                          percent: persen,
+                          completed: jumlahSelesai,
+                          total: items.length,
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  const SizedBox(height: 25),
+
+                  const SkrivaSectionTitle(
+                    title: 'Thesis Milestones',
+                    subtitle:
+                        'Ketuk tahapan untuk mengubah status.',
+                  ),
+
+                  const SizedBox(height: 14),
+
+                  if (items.isEmpty)
+                    const SkrivaGlassCard(
+                      tint: lime,
+                      child: Text(
+                        'Checklist masih kosong. Tambahkan tahap baru.',
                       ),
                     ),
-                    const SizedBox(height: 20),
-                    if (items.isEmpty)
-                      const Text(
-                        'Belum ada tahapan.',
-                        textAlign: TextAlign.center,
-                      ),
-                    ...items.map(kartu),
-                  ],
-                ),
+
+                  ...List.generate(
+                    items.length,
+                    (index) => kartuTahapan(
+                      items[index],
+                      index,
+                    ),
+                  ),
+                ],
               ),
-      ),
+            ),
     );
   }
 }
